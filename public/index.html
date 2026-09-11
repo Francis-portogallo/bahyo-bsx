@@ -1,0 +1,4322 @@
+<!DOCTYPE html>
+<!-- bahyo-etage1.html
+     @version 2.10.3
+     @date    2026-08-27
+     @change  2.10.3 — Lecture jusqu'a la fin obligatoire pour signer le NDA :
+                       bouton "J'accepte" desactive tant que l'utilisateur n'a
+                       pas scrolle en bas du texte. Indicateur visuel jaune ->
+                       vert. La case NDA du register et du login se recoche
+                       elle-meme via preventNdaCheckBypass si l'user n'a pas lu
+                       ; ca ouvre le modal directement.
+              2.10.2 — Motifs suspension/fermeture normalises (dropdown ferme).
+                       Zone details libre, obligatoire pour "AUTRE" (min 10 char).
+                       Fermeture libere l'email : renomme +closed_TS pour
+                       autoriser une nouvelle inscription avec le meme email.
+                       Modal reutilisable promptReason.
+              2.10.1 — Whitelist exemptee du NDA (migration 012 + fix au login).
+                       Signature NDA integree a la mire de login : case a cocher
+                       inline (plus de modal separe). Sans coche, le login refuse.
+              2.10.0 — Gestion des comptes existants :
+                       - Nouvel onglet "Tous les comptes" dans Gestion avec
+                         filtres (actifs / suspendus / fermés / en attente).
+                       - Actions ⏸ Suspendre (avec motif), ▶ Réactiver,
+                         🚫 Fermer (soft delete).
+                       - Login bloque les comptes suspendus (ACCOUNT_SUSPENDED)
+                         et fermes (ACCOUNT_CLOSED).
+                       - Legacy sans NDA -> modal signature forcee au login
+                         (POST /auth/resign-nda).
+                       - Admin /approve refuse si NDA non signe.
+              2.9.0 — NDA multilingue cote admin : toggle FR/EN dans l'onglet
+                      NDA de Gestion. Chaque langue a sa version publiee
+                      independamment. Migration 010 ajoute lang a bahyo_nda.
+                      /auth/nda lit d'abord la version publiee en base pour
+                      la langue demandee, sinon retombe sur les constantes.
+              2.8.1 — Toggle FR/EN dans le modal NDA (GET /auth/nda?lang=fr|en).
+                      Texte NDA renforce juridiquement (Preambule + 7 articles).
+              2.8.0 — Superadmin + Gestion : bloc Gestion dans Mon compte
+                      (visible seulement pour is_superadmin) avec 3 onglets :
+                      Liste blanche, Comptes en attente (approuver/rejeter),
+                      NDA (voir/editer/publier). Stats en tete du bloc.
+                      Nouvelle route admin.js (whitelist, NDA, pending, stats).
+                      Audit trail NDA : IP + user-agent + hash SHA-256 du texte.
+                      Validation email : MX check + blacklist emails jetables.
+              2.7.0 — Accord de confidentialite (NDA) obligatoire a la creation
+                      de compte : nouvelle case a cocher dans le register,
+                      modal texte NDA (fetch GET /auth/nda), envoi nda_accepted
+                      dans le POST /auth/register. Emails whitelistes sont
+                      auto-approuves (skip validation admin).
+              2.6.0 — 3 chantiers :
+                      1) Fix navigation bandeau vers Bioskills : mauvais ID
+                         (retenus-list -> bs-list) et fallback sur PORTEFEUILLE
+                         mock si l'analyse n'a pas ete flag "done".
+                      2) Edition d'un BS depuis le Portefeuille : bouton ✎
+                         par ligne ouvre le formulaire manuel pre-rempli +
+                         active l'assistant avec suggestion d'optimisation.
+                         doSaveBsManuel gere le mode UPDATE (state.editingBsId).
+                      3) Ecran "Mon compte" : identite juridique, portefeuille
+                         fonctionnel, porte-monnaie BAH (mock), historique.
+                         Accessible depuis le menu avatar.
+              2.5.5 — Synchro Portefeuille -> Bioskills : retrait × decoche
+                      aussi le bouton "Au portefeuille" dans l'onglet Bioskills
+                      et persiste. Bouton "Constituer le portefeuille" retire
+                      (redondant avec ➕ Au portefeuille individuel). Remplace
+                      par "Voir le portefeuille →" (simple navigation).
+              2.5.4 — Bouton ℹ️ retire (assistant flottant suffit).
+                      Persistance des selections BS (validated/enPortefeuille/
+                      rejected) dans localStorage par email — retrouvees a la
+                      reconnexion. Landing intelligent : priorite Portefeuille
+                      si des BS y sont deja ; sinon dernier ecran ; sinon
+                      progression. Boutons refletent l'etat au chargement.
+                      Fix navigation vers Portefeuille (appelle renderPortefeuille).
+                      Fix references PORTEFEUILLE (window.PORTEFEUILLE -> PORTEFEUILLE).
+              2.5.3 — Fix syntax error dans le bouton ℹ️ des cartes BS (escape
+                      cassait tout le JS). Passage a data-apt comme les autres
+                      boutons askAbout.
+              2.5.2 — Modele conceptuel clarifie :
+                      - Valider = 3A OK ; Ecarter = retirer de la vue ;
+                        ➕ Au portefeuille = decision de coter ce BS (nouveau bouton)
+                      - Ecarter cache la carte (pas juste "grise" comme avant)
+                      - ℹ️ sur chaque carte ouvre l'assistant avec la question
+                      - Fix landing : localStorage memorise le dernier ecran
+                        utilise ; initResults() appele si des BS existent
+                      - Cleanup localStorage au logout
+              2.5.1 — Portefeuille = vraie table 3 colonnes (BS × Evaluation ×
+                      Cote), avec stats en tete (nb BS, qte info, cote globale)
+                      et action "×" pour retirer. Bouton "Demander" retire des
+                      cartes BS (assistant flottant suffit). "Constituer" bascule
+                      dans le portefeuille et navigue vers l'onglet.
+                      Login : navigation auto vers le dernier ecran atteint
+                      (Sources / Bioskills / Portefeuille selon avancement).
+                      Indicateur "Qté info %" dans le bandeau, contextualise
+                      selon les BS retenus / total.
+              2.5.0 — Bandeau simplifie a 3 etapes : Sources · Bioskills ·
+                      Portefeuille (drop Analyse et Miroir de la barre).
+                      Bouton "Saisir un BS" migre dans le bloc Fichiers
+                      complementaires avec look bouton dashed + libelle 3A.
+                      Formulaire manuel : nouvelle section "Illustrations"
+                      dediee (projet, temoignage, recommandation, publication,
+                      livrable, certificat) — chiffrable pour Etage 2.
+                      Fix chevauchement FAB / CTA bas de page. Tooltip explicatif
+                      sur "0 BAH" du bandeau. Ecran screen-portefeuille placeholder.
+              2.4.0 — Refonte 3A + Portefeuille/Miroir dissocies :
+                      - Bandeau : "3·Miroir" -> "3·Portefeuille" + "4·Miroir"
+                      - Ecran Miroir placeholder (confrontation profil/portefeuille)
+                      - Bouton "Saisir un BS" deplace vers Sources
+                      - Formulaire manuel reorganise en blocs A1 Aptitude,
+                        A2 Acte, A3 Attestation (methode 3A) + intro
+                      - Evaluateur 3A dans sidebar Portefeuille (barres %)
+                      - Fix askAbout : ouvre l'assistant flottant et l'onglet Chat
+              2.3.0 — Cache portfolio + origine visible : chargerPortfolio()
+                      au login (GET /portfolio/me) precharge le miroir sans
+                      relancer Claude. Bouton "🔄 Relancer l'analyse" dans
+                      la sidebar Miroir. Date de derniere extraction affichee.
+                      Chaque BS montre son origine : "📄 <fichier>" ou
+                      "✍️ Saisie manuelle" (via ref_locale MAN-*).
+                      NB : portfolio.js — retirer embedding_calcule du SELECT.
+              2.2.0 — Saisie BS manuelle : ecran screen-bs-manuel avec
+                      formulaire (aptitude, acte, force, tiers, extrait, rang,
+                      note) + ajout dynamique de blocs etendus (facultatifs,
+                      certains marquables "chiffres" pour Etage 2). Bouton
+                      "+ Saisir un BS a la main" ajoute dans la sidebar Miroir.
+                      Miroir accessible depuis le bandeau si analyse deja faite
+                      (state.analysisDone). Backend : POST /portfolio/bs/manuel.
+              2.1.0 — Bouton "Importer" a double usage : champ URL vide →
+                      "📎 Choisir un fichier" (selecteur natif) ; URL saisie →
+                      "↗ Importer". Fichiers ZIP LN/IG retires du bloc
+                      Fichiers complementaires. Tooltip explicative sur les
+                      chips LN/IG (au hover). Bandeau d'etapes 1/2/3 cliquable
+                      avec navToStep (retour Sources depuis Analyse ou Miroir).
+              2.0.0 — Refonte UX Sources : chip LN/IG cliquable ouvre directement
+                      la page d'export + selectionne le mode. Suppression de la
+                      dropzone compacte et des blocs export-help/export-guide.
+                      Assistant transforme en BULLE FLOTTANTE globale (bouton FAB
+                      en bas a droite) avec 2 onglets : Chat + Aide (guides LN/IG).
+                      Toujours accessible depuis toutes les pages.
+              1.9.0 — Aide export LN/IG : bouton "Telecharger mon export"
+                      qui ouvre la page dediee LinkedIn ou Instagram +
+                      guide depliable en 4 etapes.
+              1.8.2 — Upload envoie est_reference + reseau dans le FormData :
+                      un PDF depose dans "Profil public" est bien marque comme
+                      reference cote serveur (peu importe son nom de fichier).
+              1.8.1 — Retour des chips LinkedIn/Instagram pour qualifier
+                      explicitement l'origine. Bouton "Importer" fonctionnel :
+                      POST /sources/url (nouveau endpoint, type LINKEDIN_URL /
+                      INSTAGRAM_URL). Dropzone compacte reintroduite pour ZIP.
+                      Support Enter dans le champ URL.
+              1.8.0 — UX Sources : bloc "Fil directeur" reduit a une ligne
+                      URL + Importer (tabs LN/IG et dropzone dediee retirees).
+                      Le bloc "Fichiers" accepte desormais aussi les ZIP LN/IG
+                      qui sont detectes automatiquement (server side).
+                      Plus compact, mobile-friendly.
+              1.7.3 — UX liste sources : uploads en cours en haut (visible pres du
+                      drop zone), separateur "En cours…" / "Nouveaux (cette session)"
+                      / "Deja en base". Scroll a 260px. Fond bleu clair pour les
+                      nouveaux de la session.
+              1.7.2 — Barre de progression XHR temps reel (%) au lieu du spinner
+                      + toast si nom suffixe cote serveur (doublon nom, taille differente)
+              1.7.1 — Fix bouton "x" (id UUID a quoter) + spinner upload en cours
+                      + anti-doublon nom+taille cote client + escape HTML
+              1.7.0 — Persistance : upload reel vers POST /sources/upload +
+                      hydratation via GET /sources au login + DELETE /sources/:id
+                      a la suppression + bouton Analyser toujours cliquable avec
+                      message pedagogique si pas de source publique
+              1.6.1 — Register : Email de connexion en 1er, Nom complet en 2e
+                      avec label plus explicite
+              1.6.0 — UX : logo Bahyo cliquable (retour accueil) + menu avatar
+                      avec email + bouton "Se deconnecter" (POST /auth/logout)
+              1.5.0 — Validation admin des comptes : gestion code=ACCOUNT_PENDING au login
+                      + message "en attente" apres ?verified=1&pending=1
+              1.4.0 — Mot de passe oublie : bouton "Reinitialiser" branche sur
+                      doForgotPassword() + nouvel ecran screen-forgot + screen-reset-password
+                      Handler DOMContentLoaded gere ?reset=token
+              1.3.3 — API_BASE = '' (meme origine bsx.bahyo.net) + fix syntax askAbout/challenge
+              1.3.1 — Fix JS ligne 1801 : askAbout via data-apt (syntaxe quote dans onclick)
+              1.3.0 — Securite : verification email (form-email-sent), screen-change-password,
+                      doLogin/doRegister/doSetPassword/doResendVerification appellent l'API reelle,
+                      handler DOMContentLoaded pour ?verified=1
+              1.2.0 — Ajout API_BASE = 'https://bfx.bahyo.net' (production)
+              1.1.0 — Écran auth (login/register) + onboarding 2017 RGPD + upload sources LN/Insta
+              1.0.0 — Prototype miroir didactique (portfolio brut + résultats mock)
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bahyo — Portefeuille brut</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:      #0f1f3d;
+  --navy-mid:  #1e3a5f;
+  --blue:      #2563eb;
+  --blue-lt:   #eff6ff;
+  --green:     #16a34a;
+  --green-lt:  #f0fdf4;
+  --amber:     #d97706;
+  --amber-lt:  #fffbeb;
+  --slate:     #475569;
+  --slate-lt:  #f8fafc;
+  --gray:      #6b7280;
+  --gray-lt:   #f3f4f6;
+  --border:    #e2e8f0;
+  --red:       #dc2626;
+  --red-lt:    #fef2f2;
+  --text:      #0f172a;
+  --text-sm:   #475569;
+  --radius:    10px;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: #f1f5f9;
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── NAV ─────────────────────────────────────────────── */
+nav {
+  background: var(--navy);
+  padding: 0 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+.logo span { color: #60a5fa; }
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.bah-balance {
+  background: rgba(255,255,255,.1);
+  color: #fff; font-size: 12px; font-weight: 600;
+  padding: 4px 10px; border-radius: 20px;
+  display: flex; align-items: center; gap: 5px;
+}
+.bah-balance::before { content: '◈'; color: #60a5fa; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-step {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: rgba(255,255,255,.5);
+}
+.nav-step .step {
+  padding: 3px 10px; border-radius: 12px; font-weight: 600;
+}
+.nav-step .step.active { background: var(--blue); color: #fff; }
+.nav-step .step.done { background: var(--green); color: #fff; }
+.nav-sep { font-size: 10px; }
+
+/* ── ÉCRANS ──────────────────────────────────────────── */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── AUTH ────────────────────────────────────────────── */
+.auth-wrap {
+  min-height: calc(100vh - 52px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px 16px;
+  background: linear-gradient(160deg, #0f1f3d 0%, #1e3a5f 50%, #0f1f3d 100%);
+}
+.auth-card {
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  width: 100%; max-width: 420px;
+  overflow: hidden;
+}
+.auth-card-head {
+  background: var(--navy); padding: 28px 32px 22px;
+  text-align: center;
+}
+.auth-logo { font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -.5px; }
+.auth-logo span { color: #60a5fa; }
+.auth-logo-sub { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 3px; }
+.auth-card-body { padding: 28px 32px 32px; }
+.auth-tabs {
+  display: flex; border-bottom: 2px solid var(--border);
+  margin-bottom: 22px;
+}
+.auth-tab {
+  flex: 1; text-align: center; padding: 10px;
+  font-size: 13px; font-weight: 700; color: var(--gray);
+  border: none; background: none; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: all .15s;
+}
+.auth-tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-field { display: flex; flex-direction: column; gap: 5px; }
+.auth-label { font-size: 12px; font-weight: 600; color: var(--text-sm); }
+.auth-input {
+  font-size: 14px; padding: 10px 14px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  outline: none; font-family: inherit; color: var(--text);
+  transition: border-color .15s;
+}
+.auth-input:focus { border-color: var(--blue); }
+.auth-input.error { border-color: var(--red); }
+.pwd-wrap { position: relative; }
+.pwd-wrap .auth-input { width: 100%; padding-right: 40px; }
+.pwd-eye {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  cursor: pointer; color: var(--gray); font-size: 16px; user-select: none;
+  background: none; border: none; padding: 0; line-height: 1;
+}
+.pwd-eye:hover { color: var(--navy); }
+.auth-error {
+  font-size: 12px; color: var(--red);
+  padding: 8px 12px; background: var(--red-lt);
+  border-radius: 6px; display: none;
+}
+.auth-error.show { display: block; }
+.btn-auth {
+  background: var(--navy); color: #fff; border: none;
+  padding: 12px; border-radius: 8px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  margin-top: 4px; transition: background .12s;
+}
+.btn-auth:hover { background: #0a1628; }
+.auth-sep {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: #9ca3af;
+}
+.auth-sep::before, .auth-sep::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.auth-hint { font-size: 12px; color: var(--text-sm); text-align: center; }
+.auth-hint a { color: var(--blue); cursor: pointer; text-decoration: none; font-weight: 600; }
+.auth-hint a:hover { text-decoration: underline; }
+.auth-rgpd {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px; color: var(--text-sm); line-height: 1.5;
+}
+.auth-rgpd input { margin-top: 2px; flex-shrink: 0; }
+.auth-rgpd a { color: var(--blue); }
+
+/* ── ONBOARDING 2017 ─────────────────────────────────── */
+.onboarding-wrap {
+  min-height: calc(100vh - 52px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 32px 20px 80px;
+  background: #f1f5f9;
+}
+.onboarding-card {
+  background: #fff; border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  width: 100%; max-width: 600px;
+  overflow: hidden;
+}
+.onboarding-head {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+  padding: 28px 32px;
+  display: flex; align-items: flex-start; gap: 16px;
+}
+.onboarding-avatar-wrap {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--blue); border: 3px solid rgba(255,255,255,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.onboarding-head-text h2 {
+  font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px;
+}
+.onboarding-head-text p { font-size: 13px; color: rgba(255,255,255,.65); }
+.onboarding-body { padding: 24px 32px 28px; }
+
+.ob-section { margin-bottom: 22px; }
+.ob-section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-sm); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ob-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* Nouveauté box */
+.ob-new-box {
+  background: var(--blue-lt); border: 1px solid #bfdbfe;
+  border-radius: 10px; padding: 14px 16px;
+  font-size: 13px; color: var(--navy-mid); line-height: 1.6;
+}
+.ob-new-box strong { color: var(--navy); }
+
+/* LinkedIn pré-rempli */
+.ob-ln-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; background: var(--slate-lt);
+  border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px;
+}
+.ob-ln-dot { width: 8px; height: 8px; border-radius: 50%; background: #0077b5; flex-shrink: 0; }
+.ob-ln-url { font-size: 13px; font-weight: 500; color: var(--navy-mid); flex: 1; word-break: break-all; }
+.ob-ln-tag {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  background: #e8f4fb; color: #0077b5; padding: 2px 7px; border-radius: 6px; flex-shrink: 0;
+}
+
+/* Export steps */
+.ob-steps { display: flex; flex-direction: column; gap: 8px; }
+.ob-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: var(--text-sm); line-height: 1.5;
+}
+.ob-step-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--navy); color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Consentement */
+.ob-consent {
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 10px; padding: 14px 16px;
+  font-size: 13px; color: #78350f; line-height: 1.6;
+}
+.ob-consent-check {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 10px;
+}
+.ob-consent-check input { margin-top: 2px; flex-shrink: 0; accent-color: var(--navy); }
+.ob-consent-check label { font-size: 12px; color: #78350f; cursor: pointer; }
+
+.ob-actions { display: flex; gap: 10px; margin-top: 6px; }
+.btn-ob-ln {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: #0077b5; color: #fff; border: none;
+  padding: 12px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background .12s;
+}
+.btn-ob-ln:hover { background: #005f93; }
+.btn-ob-ln:disabled { background: #94a3b8; cursor: not-allowed; }
+.btn-ob-skip {
+  background: none; color: var(--text-sm); border: 1px solid var(--border);
+  padding: 12px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-ob-skip:hover { background: var(--slate-lt); }
+
+/* ────────────────────────────────────────────────────── */
+/*  ÉCRAN 1 — SOURCES                                    */
+/* ────────────────────────────────────────────────────── */
+.upload-layout {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 20px 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.upload-hero {
+  text-align: center;
+  padding: 10px 0 6px;
+}
+.upload-hero h1 {
+  font-size: 22px; font-weight: 800; color: var(--navy);
+  margin-bottom: 6px;
+}
+.upload-hero p { font-size: 14px; color: var(--text-sm); }
+
+/* Fil directeur */
+.section-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.section-card-head {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--slate-lt);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-card-icon {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.section-card-icon.ln { background: #0077b5; }
+.section-card-icon.files { background: var(--navy-mid); }
+.section-card-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+.section-card-sub { font-size: 12px; color: var(--text-sm); }
+.section-card-badge {
+  margin-left: auto;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 8px;
+}
+.section-card-badge.required {
+  background: #fff3cd; color: #92400e;
+}
+.section-card-badge.optional {
+  background: var(--gray-lt); color: var(--gray);
+}
+.section-card-body { padding: 18px 20px; }
+
+/* Source réseau social */
+.social-tabs {
+  display: flex; gap: 6px; margin-bottom: 14px;
+}
+.social-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--text-sm);
+  transition: all .12s;
+}
+.social-tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+.social-tab.ln-tab .dot { background: #0077b5; }
+.social-tab.ig-tab .dot { background: #e1306c; }
+.social-tab.active { border-color: var(--blue); background: var(--blue-lt); color: var(--blue); }
+
+.source-url-row {
+  display: flex; gap: 8px; margin-bottom: 14px;
+}
+.source-url-input {
+  flex: 1; font-size: 13px; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  outline: none; font-family: inherit; color: var(--text);
+  background: var(--slate-lt);
+}
+.source-url-input:focus { border-color: var(--blue); background: #fff; }
+.source-url-input::placeholder { color: #9ca3af; }
+.btn-import {
+  background: #0077b5; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 9px 16px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background .12s;
+}
+.btn-import:hover { background: #005f93; }
+.btn-import.ig { background: #e1306c; }
+.btn-import.ig:hover { background: #c2255c; }
+
+.divider {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: #9ca3af; margin: 12px 0;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* Drop zone */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+  background: var(--slate-lt);
+  position: relative;
+}
+.dropzone:hover, .dropzone.drag-over {
+  border-color: var(--blue);
+  background: var(--blue-lt);
+}
+.dropzone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.dropzone-icon { font-size: 24px; margin-bottom: 6px; }
+.dropzone-label {
+  font-size: 13px; font-weight: 600; color: var(--text-sm);
+  margin-bottom: 3px;
+}
+.dropzone-sub { font-size: 12px; color: #9ca3af; }
+.dropzone-types {
+  display: flex; justify-content: center; gap: 6px; margin-top: 10px;
+}
+.type-chip {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; padding: 2px 7px; border-radius: 6px;
+  background: var(--gray-lt); color: var(--gray);
+}
+
+/* Source list */
+.source-list {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 14px;
+}
+.source-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; background: var(--slate-lt);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.source-item.reference { border-color: var(--blue); background: var(--blue-lt); }
+.source-type-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 6px; white-space: nowrap; flex-shrink: 0;
+}
+.source-type-badge.ln { background: #e8f4fb; color: #0077b5; }
+.source-type-badge.ig { background: #fce4ec; color: #e1306c; }
+.source-type-badge.cv { background: var(--blue-lt); color: var(--blue); }
+.source-type-badge.libre { background: var(--gray-lt); color: var(--gray); }
+.source-type-badge.ref {
+  background: var(--green-lt); color: var(--green);
+}
+.source-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.source-size { font-size: 11px; color: var(--gray); flex-shrink: 0; }
+.source-status { font-size: 11px; flex-shrink: 0; }
+.source-status.ok { color: var(--green); }
+.source-status.processing { color: var(--amber); }
+.btn-remove {
+  background: none; border: none; cursor: pointer;
+  color: #9ca3af; font-size: 14px; padding: 2px 4px;
+  border-radius: 4px; flex-shrink: 0;
+}
+.btn-remove:hover { color: var(--red); background: var(--red-lt); }
+
+/* Private files hint */
+.priv-hint {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; background: #fefce8;
+  border: 1px solid #fde68a; border-radius: 8px;
+  margin-top: 12px;
+  font-size: 12px; color: #78350f; line-height: 1.5;
+}
+.priv-hint::before { content: '🔒'; flex-shrink: 0; }
+
+/* CTA upload */
+.upload-cta {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #fff; border-top: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; z-index: 50;
+  box-shadow: 0 -4px 12px rgba(0,0,0,.06);
+}
+.upload-cta-info { font-size: 13px; color: var(--text-sm); }
+.upload-cta-info strong { color: var(--text); }
+.btn-analyze {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--navy); color: #fff;
+  border: none; padding: 10px 24px;
+  border-radius: 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: background .12s;
+}
+.btn-analyze:hover { background: #0a1628; }
+.btn-analyze:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* ── ANALYZING ───────────────────────────────────────── */
+.analyzing-screen {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 60vh; gap: 16px;
+  padding: 40px 20px;
+}
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.analyzing-label {
+  font-size: 16px; font-weight: 700; color: var(--navy);
+}
+.analyzing-steps {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--text-sm); text-align: center;
+}
+.analyzing-step { transition: color .3s; }
+.analyzing-step.done { color: var(--green); }
+.analyzing-step.current { color: var(--blue); font-weight: 600; }
+
+/* ────────────────────────────────────────────────────── */
+/*  ÉCRAN 2 — RÉSULTATS                                  */
+/* ────────────────────────────────────────────────────── */
+.results-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 20px 80px;
+}
+@media (max-width: 900px) {
+  .results-layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}
+
+/* Sources résumé (bande en haut des résultats) */
+.sources-bar {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 18px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.sources-bar-label {
+  font-size: 12px; font-weight: 700; color: var(--text-sm);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.sources-bar-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.source-pill {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500;
+  padding: 3px 10px; border-radius: 12px;
+  background: var(--slate-lt); border: 1px solid var(--border);
+  color: var(--text-sm);
+}
+.source-pill .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.source-pill .dot.ln { background: #0077b5; }
+.source-pill .dot.cv { background: var(--blue); }
+.source-pill .dot.libre { background: var(--gray); }
+.btn-re-analyze {
+  font-size: 12px; font-weight: 600; color: var(--blue);
+  background: none; border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 8px; cursor: pointer;
+  margin-left: auto; white-space: nowrap;
+}
+.btn-re-analyze:hover { background: var(--blue-lt); border-color: var(--blue); }
+
+/* Miroir */
+.miroir-card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 22px;
+  margin-bottom: 14px; box-shadow: var(--shadow);
+}
+.miroir-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--blue); margin-bottom: 5px;
+}
+.miroir-title { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
+.miroir-sub { font-size: 13px; color: var(--text-sm); margin-bottom: 14px; }
+.stats-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.stat-chip {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600;
+  padding: 4px 11px; border-radius: 20px;
+  background: var(--gray-lt); color: var(--text-sm);
+}
+.stat-chip.verifiee   { background: var(--green-lt); color: var(--green); }
+.stat-chip.potentielle{ background: var(--blue-lt);  color: var(--blue); }
+.stat-chip.detaillee  { background: var(--amber-lt); color: var(--amber); }
+.stat-chip.candidat   { background: var(--gray-lt);  color: var(--gray); }
+.stat-chip.ecartes    { background: #fff0f0;          color: var(--red); }
+
+/* Section head */
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; padding: 0 2px;
+}
+.section-title { font-size: 13px; font-weight: 700; color: var(--navy-mid); }
+.section-count { font-size: 12px; color: var(--text-sm); font-weight: 500; }
+
+/* BS cards */
+.bs-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.bs-card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 15px 18px;
+  box-shadow: var(--shadow); transition: box-shadow .15s, border-color .15s;
+  position: relative;
+}
+.bs-card:hover { box-shadow: var(--shadow-md); }
+.bs-card.validated { border-color: var(--green); background: #fafffe; }
+.bs-card.validated::after {
+  content: '✓'; position: absolute; top: 13px; right: 14px;
+  width: 20px; height: 20px; background: var(--green); color: #fff;
+  border-radius: 50%; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.bs-card.rejected { opacity: .42; border-color: #e5e7eb; }
+
+.bs-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.bs-aptitude { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; line-height: 1.4; }
+.force-badge {
+  flex-shrink: 0; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: 3px 9px; border-radius: 12px; white-space: nowrap;
+}
+.force-badge.verifiee   { background: var(--green-lt); color: var(--green); }
+.force-badge.potentielle{ background: var(--blue-lt);  color: var(--blue); }
+.force-badge.detaillee  { background: var(--amber-lt); color: var(--amber); }
+.force-badge.candidat   { background: var(--gray-lt);  color: var(--gray); }
+
+.bs-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.meta-tag { font-size: 12px; color: var(--text-sm); display: flex; align-items: center; gap: 4px; }
+.meta-tag .label { color: var(--slate); font-weight: 500; }
+.tiers-tag {
+  font-size: 12px; font-weight: 600; color: var(--navy-mid);
+  background: #f0f4ff; padding: 2px 8px; border-radius: 6px;
+  display: flex; align-items: center; gap: 4px;
+}
+.tiers-tag::before { content: '🏛'; font-size: 11px; }
+
+.extrait {
+  font-size: 12px; color: var(--text-sm);
+  background: var(--slate-lt); border-left: 3px solid var(--border);
+  padding: 7px 12px; border-radius: 0 6px 6px 0;
+  margin-bottom: 11px; font-style: italic; line-height: 1.5;
+}
+
+.bs-actions { display: flex; gap: 8px; }
+.btn { font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 6px; border: none; cursor: pointer; transition: background .12s; }
+.btn-validate { background: var(--green); color: #fff; }
+.btn-validate:hover { background: #15803d; }
+.btn-validate.active { background: #dcfce7; color: var(--green); }
+.btn-reject { background: var(--gray-lt); color: var(--text-sm); }
+.btn-reject:hover { background: #e5e7eb; }
+.btn-reject.active { background: var(--red-lt); color: var(--red); }
+.btn-ask { background: var(--blue-lt); color: var(--blue); margin-left: auto; }
+.btn-ask:hover { background: #dbeafe; }
+
+/* Écartés */
+.ecartes-section {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  overflow: hidden; margin-bottom: 20px;
+}
+.ecartes-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 18px; cursor: pointer; user-select: none;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.ecartes-toggle:hover { background: var(--slate-lt); }
+.ecartes-toggle-left { display: flex; align-items: center; gap: 10px; }
+.ecartes-label { font-size: 13px; font-weight: 700; color: var(--slate); }
+.ecartes-count {
+  font-size: 12px; background: #fee2e2; color: var(--red);
+  padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+.ecartes-hint { font-size: 12px; color: var(--text-sm); }
+.ecartes-chevron { font-size: 11px; color: var(--gray); transition: transform .2s; }
+.ecartes-chevron.open { transform: rotate(180deg); }
+.ecartes-body { display: none; border-top: 1px solid var(--border); }
+.ecartes-body.open { display: block; }
+.ecarte-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 11px 18px; border-bottom: 1px solid var(--border);
+}
+.ecarte-item:last-child { border-bottom: none; }
+.ecarte-raison {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; padding: 2px 7px; border-radius: 8px;
+  background: var(--gray-lt); color: var(--gray);
+  white-space: nowrap; flex-shrink: 0;
+}
+.ecarte-aptitude { font-size: 13px; color: var(--text-sm); flex: 1; }
+.ecarte-extrait { font-size: 11px; color: #9ca3af; margin-top: 2px; font-style: italic; }
+.btn-challenge {
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: #fff; color: var(--blue); cursor: pointer; flex-shrink: 0;
+}
+.btn-challenge:hover { background: var(--blue-lt); }
+
+/* ── SIDEBAR ─────────────────────────────────────────── */
+.sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+.score-card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
+}
+.score-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-sm); margin-bottom: 14px;
+}
+.score-ring-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.score-ring {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: conic-gradient(var(--blue) 0% 0%, var(--border) 0% 100%);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; flex-shrink: 0; transition: background .4s;
+}
+.score-ring::after {
+  content: ''; position: absolute; width: 46px; height: 46px;
+  border-radius: 50%; background: #fff;
+}
+.score-value { position: relative; z-index: 1; font-size: 16px; font-weight: 800; color: var(--navy); }
+.score-info { flex: 1; }
+.score-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.score-sub { font-size: 12px; color: var(--text-sm); }
+
+.force-bars { display: flex; flex-direction: column; gap: 6px; }
+.force-bar-row { display: flex; align-items: center; gap: 8px; }
+.force-bar-label { font-size: 11px; font-weight: 600; width: 72px; flex-shrink: 0; }
+.force-bar-label.verifiee   { color: var(--green); }
+.force-bar-label.potentielle{ color: var(--blue); }
+.force-bar-label.detaillee  { color: var(--amber); }
+.force-bar-label.candidat   { color: var(--gray); }
+.force-bar-track { flex: 1; height: 6px; background: var(--gray-lt); border-radius: 3px; overflow: hidden; }
+.force-bar-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+.force-bar-fill.verifiee   { background: var(--green); }
+.force-bar-fill.potentielle{ background: var(--blue); }
+.force-bar-fill.detaillee  { background: var(--amber); }
+.force-bar-fill.candidat   { background: #d1d5db; }
+.force-bar-count { font-size: 11px; font-weight: 700; color: var(--text-sm); width: 14px; text-align: right; }
+
+/* Sources sidebar */
+.sources-sidebar {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 16px 12px; box-shadow: var(--shadow);
+}
+.sources-sidebar-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-sm); margin-bottom: 10px;
+}
+.sources-sidebar-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.sources-sidebar-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 7px;
+  background: var(--slate-lt); border: 1px solid var(--border);
+}
+.btn-add-source {
+  width: 100%; font-size: 12px; font-weight: 600; color: var(--blue);
+  background: none; border: 1px dashed var(--border); border-radius: 7px;
+  padding: 7px; cursor: pointer; text-align: center; margin-top: 2px;
+}
+.btn-add-source:hover { border-color: var(--blue); background: var(--blue-lt); }
+
+/* Assistant */
+.assistant-card {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.assistant-head {
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 9px; background: var(--slate-lt);
+}
+.assistant-avatar {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--navy); color: #60a5fa; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.assistant-name { font-size: 13px; font-weight: 700; color: var(--navy); }
+.assistant-tag {
+  font-size: 10px; font-weight: 600;
+  background: var(--green-lt); color: var(--green);
+  padding: 2px 6px; border-radius: 8px; margin-left: auto;
+}
+.chat-body {
+  overflow-y: auto; padding: 11px; min-height: 160px; max-height: 220px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.msg { font-size: 12.5px; line-height: 1.5; padding: 8px 11px; border-radius: 10px; max-width: 90%; }
+.msg.assistant { background: var(--slate-lt); color: var(--text); border-bottom-left-radius: 3px; align-self: flex-start; }
+.msg.user { background: var(--navy); color: #fff; border-bottom-right-radius: 3px; align-self: flex-end; }
+.msg.typing { background: var(--slate-lt); color: var(--gray); font-style: italic; align-self: flex-start; }
+.chat-input-row { display: flex; gap: 6px; padding: 9px 11px; border-top: 1px solid var(--border); }
+.chat-input {
+  flex: 1; font-size: 12px; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  outline: none; font-family: inherit; color: var(--text); background: var(--slate-lt);
+}
+.chat-input:focus { border-color: var(--blue); background: #fff; }
+.chat-input::placeholder { color: #9ca3af; }
+.btn-send {
+  background: var(--blue); color: #fff; border: none;
+  border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+}
+.btn-send:hover { background: #1d4ed8; }
+
+/* CTA résultats */
+.cta-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #fff; border-top: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; z-index: 50;
+  box-shadow: 0 -4px 12px rgba(0,0,0,.06);
+}
+.cta-info { font-size: 13px; color: var(--text-sm); }
+.cta-info strong { color: var(--text); }
+.cta-actions { display: flex; gap: 10px; }
+.btn-primary {
+  background: var(--navy); color: #fff; border: none;
+  padding: 9px 20px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-primary:hover { background: #0a1628; }
+.btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+.btn-secondary {
+  background: none; color: var(--blue); border: 1px solid var(--blue);
+  padding: 9px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-secondary:hover { background: var(--blue-lt); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 72px; left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--navy); color: #fff;
+  padding: 9px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  opacity: 0; transition: opacity .2s, transform .2s;
+  pointer-events: none; z-index: 200; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Upload en cours */
+.source-status.uploading { color: #d97706; font-weight: 600; font-size: 12px; min-width: 40px; text-align: right; }
+.source-item.uploading { background: #fef3c7 !important; border-color: #fcd34d !important; }
+.upload-progress-wrap {
+  display: inline-block; width: 100px; height: 6px;
+  background: #fde68a; border-radius: 3px; overflow: hidden; margin: 0 6px;
+}
+.upload-progress-bar {
+  display: block; height: 100%; background: linear-gradient(90deg,#f59e0b,#d97706);
+  transition: width .2s ease-out;
+}
+/* Boutons "Au portefeuille" et "info" sur les cartes BS */
+.btn.btn-pf {
+  background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
+}
+.btn.btn-pf.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.btn.btn-pf:hover { background: #dbeafe; }
+.btn.btn-info {
+  background: transparent; color: #64748b; border: 1px solid #cbd5e1;
+  padding: 4px 10px;
+}
+.btn.btn-info:hover { color: #0f1f3d; background: #f1f5f9; }
+/* Bouton "Saisir un BS" dans le bloc Fichiers complémentaires */
+.section-divider-inline {
+  display: flex; align-items: center; margin: 16px 0 12px 0;
+  color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+}
+.section-divider-inline::before, .section-divider-inline::after {
+  content: ''; flex: 1; border-top: 1px solid #e2e8f0;
+}
+.section-divider-inline span { padding: 0 12px; }
+.btn-bs-manuel {
+  width: 100%; padding: 12px 16px; background: #eff6ff; color: #1d4ed8;
+  border: 1px dashed #93c5fd; border-radius: 8px;
+  font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.btn-bs-manuel:hover { background: #dbeafe; }
+/* Bloc Illustrations : léger fond différencié */
+.bs-block.bs-block-illustrations { border-left: 4px solid #f59e0b; }
+/* Badges méthode 3A dans le formulaire de saisie manuelle */
+.bs-3a-badge {
+  display: inline-block; min-width: 26px; padding: 2px 8px; margin-right: 8px;
+  background: #2563eb; color: #fff; border-radius: 12px;
+  font-size: 12px; font-weight: 700; text-align: center;
+}
+.bs-3a-hint { font-weight: 400; color: #94a3b8; font-size: 13px; margin-left: 8px; }
+/* Évaluateur 3A dans la sidebar Portefeuille */
+.evaluateur-3a {
+  margin-top: 16px; padding: 12px; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 8px;
+}
+.evaluateur-title {
+  font-size: 12px; font-weight: 700; color: #0f1f3d;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px;
+}
+.evaluateur-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-size: 12px;
+}
+.evaluateur-label { width: 78px; color: #475569; }
+.evaluateur-bar-wrap {
+  flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+}
+.evaluateur-bar {
+  height: 100%; background: linear-gradient(90deg, #2563eb, #1d4ed8);
+  transition: width .3s ease-out;
+}
+.evaluateur-pct { width: 32px; text-align: right; font-weight: 600; color: #0f1f3d; }
+/* Bloc Gestion superadmin */
+.compte-block.admin-block { border-left: 4px solid #dc2626; }
+.admin-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.admin-stat {
+  padding: 10px; background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: 8px; text-align: center;
+}
+.admin-stat span { display: block; font-size: 20px; font-weight: 700; color: #991b1b; }
+.admin-stat label { display: block; font-size: 11px; color: #7f1d1d; margin-top: 2px; }
+.admin-tabs { display: flex; gap: 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px; }
+.admin-tab {
+  padding: 8px 14px; background: none; border: 0; cursor: pointer;
+  font-size: 13px; color: #64748b; border-bottom: 2px solid transparent;
+}
+.admin-tab.active { color: #dc2626; border-bottom-color: #dc2626; font-weight: 600; }
+.admin-row-add { display: flex; gap: 8px; align-items: center; }
+.admin-row-add input { flex: 1; }
+/* Modal NDA */
+.nda-overlay {
+  position: fixed; inset: 0; background: rgba(15,31,61,.55);
+  z-index: 1500; display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.nda-modal {
+  background: #fff; border-radius: 12px; width: 100%; max-width: 640px;
+  max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(15,31,61,.35);
+}
+.nda-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.nda-head h3 { margin: 0; font-size: 16px; color: #0f1f3d; flex: 1; }
+.nda-close { background: none; border: 0; font-size: 22px; color: #64748b; cursor: pointer; }
+.nda-lang-toggle { display: flex; gap: 4px; margin: 0 12px; }
+.nda-lang-toggle button {
+  padding: 4px 10px; background: #f1f5f9; color: #64748b;
+  border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+}
+.nda-lang-toggle button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.nda-body {
+  padding: 20px; overflow-y: auto; flex: 1;
+  font-family: inherit; font-size: 13px; color: #334155; white-space: pre-wrap;
+  line-height: 1.6; margin: 0;
+}
+.nda-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 14px 20px; border-top: 1px solid #e2e8f0;
+}
+.nda-actions .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
+.nda-scroll-hint {
+  padding: 8px 20px; background: #fef3c7; color: #92400e;
+  font-size: 12px; border-top: 1px solid #fcd34d;
+  text-align: center; transition: all .3s;
+}
+.nda-scroll-hint.read { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+/* Écran Mon compte */
+.compte-wrap { max-width: 780px; margin: 0 auto; padding: 24px 20px 100px; }
+.compte-head { position: relative; margin-bottom: 20px; }
+.compte-head h1 { margin: 0; color: #0f1f3d; font-size: 24px; }
+.compte-block {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 20px; margin-bottom: 16px;
+}
+.compte-block h3 { margin: 0 0 14px 0; font-size: 16px; color: #0f1f3d; }
+.compte-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px;
+}
+.compte-row:last-child { border-bottom: 0; }
+.compte-label { color: #64748b; }
+.compte-val { font-weight: 500; color: #0f1f3d; word-break: break-all; text-align: right; }
+.compte-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.btn-danger {
+  padding: 8px 14px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+  border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.btn-danger:hover { background: #fee2e2; }
+.compte-hint { margin-top: 12px; font-size: 12px; color: #94a3b8; }
+.wallet-card {
+  padding: 20px; background: linear-gradient(135deg, #1e40af, #2563eb);
+  color: #fff; border-radius: 10px; margin-bottom: 12px; text-align: center;
+}
+.wallet-solde { font-size: 32px; font-weight: 700; }
+.wallet-sub { font-size: 12px; opacity: .85; margin-top: 4px; }
+/* Écran Portefeuille */
+.portefeuille-wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 120px; }
+.portefeuille-head { margin-bottom: 20px; }
+.portefeuille-head h1 { margin: 0 0 12px 0; color: #0f1f3d; font-size: 24px; }
+.portefeuille-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.pf-stat {
+  flex: 1; min-width: 140px;
+  padding: 14px 18px; background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.pf-stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+.pf-stat-value { margin-top: 4px; font-size: 22px; font-weight: 700; color: #0f1f3d; }
+.pf-table {
+  width: 100%; border-collapse: collapse; background: #fff;
+  border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
+  font-size: 14px;
+}
+.pf-table th {
+  padding: 10px 14px; text-align: left; background: #f1f5f9;
+  color: #475569; font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.pf-table td {
+  padding: 12px 14px; border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.pf-table tr:last-child td { border-bottom: 0; }
+.pf-table tr:hover td { background: #f8fafc; }
+.pf-empty td { text-align: center; color: #94a3b8; padding: 32px !important; }
+.pf-eval { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.pf-eval.high { background: #dcfce7; color: #166534; }
+.pf-eval.mid  { background: #fef3c7; color: #92400e; }
+.pf-eval.low  { background: #fee2e2; color: #991b1b; }
+.pf-cote { font-weight: 700; color: #0f1f3d; }
+.pf-hint { margin-top: 14px; font-size: 12px; color: #94a3b8; }
+.pf-remove, .pf-edit {
+  background: transparent; border: 0; color: #94a3b8; cursor: pointer; font-size: 16px;
+  padding: 4px 6px; border-radius: 4px;
+}
+.pf-remove:hover { color: #dc2626; background: #fef2f2; }
+.pf-edit:hover   { color: #1d4ed8; background: #eff6ff; }
+/* Indicateur qté info dans le bandeau */
+.nav-info-indicator {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 12px; margin-left: 8px;
+  background: rgba(37,99,235,.12); color: #93c5fd; font-size: 11px; font-weight: 600;
+}
+/* Écran Miroir (placeholder) */
+.miroir-wrap { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+.miroir-wrap h1 { margin: 0 0 12px 0; font-size: 26px; }
+.miroir-intro { color: #475569; line-height: 1.6; font-size: 15px; margin-bottom: 16px; }
+.miroir-buts { margin: 0 0 32px 20px; color: #334155; line-height: 1.8; font-size: 14px; }
+.miroir-soon {
+  text-align: center; padding: 40px 24px; background: #f8fafc;
+  border: 2px dashed #cbd5e1; border-radius: 12px;
+}
+.miroir-soon-icon { font-size: 36px; margin-bottom: 8px; }
+.miroir-soon-title { font-size: 18px; font-weight: 700; color: #0f1f3d; margin-bottom: 6px; }
+.miroir-soon-text { color: #64748b; font-size: 13px; }
+/* Origine d'extraction dans les cartes BS */
+.bs-origine {
+  display: inline-block; margin-top: 8px;
+  padding: 3px 8px; font-size: 11px; color: #64748b;
+  background: #f1f5f9; border-radius: 4px;
+}
+/* Chips avec fleche "ouvre nouvel onglet" */
+.social-tab .chip-arrow { color: #94a3b8; font-size: 11px; margin-left: 4px; }
+/* Bouton Import en mode "Choisir un fichier" */
+.btn-import.btn-import-file { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.btn-import.btn-import-file:hover { background: #dbeafe; }
+/* Screen saisie BS manuelle */
+.bs-manuel-wrap { max-width: 780px; margin: 0 auto; padding: 24px 20px 100px; }
+.bs-manuel-head { position: relative; margin-bottom: 24px; }
+.bs-manuel-head h1 { margin: 0 0 6px 0; font-size: 24px; color: #0f1f3d; }
+.bs-manuel-head p { margin: 0; color: #64748b; font-size: 14px; line-height: 1.5; }
+.btn-back-bs {
+  position: absolute; top: 0; right: 0;
+  padding: 6px 12px; background: transparent; border: 1px solid #cbd5e1;
+  border-radius: 6px; cursor: pointer; font-size: 13px; color: #475569;
+}
+.btn-back-bs:hover { background: #f1f5f9; }
+.bs-block {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 20px; margin-bottom: 16px;
+}
+.bs-block.bs-block-main { border-left: 4px solid #2563eb; }
+.bs-block h3 { margin: 0 0 14px 0; font-size: 16px; color: #0f1f3d; }
+.bs-label {
+  display: block; font-size: 13px; font-weight: 500; color: #334155;
+  margin: 12px 0 6px 0;
+}
+.bs-req { color: #dc2626; margin-left: 2px; }
+.bs-input {
+  width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px;
+  font-size: 14px; font-family: inherit; box-sizing: border-box; background: #fff;
+}
+.bs-input:focus { outline: 2px solid #93c5fd; border-color: #2563eb; }
+.bs-textarea { resize: vertical; min-height: 60px; }
+.bs-help { margin: 0 0 12px 0; color: #64748b; font-size: 13px; line-height: 1.5; }
+.bs-error { padding: 10px 14px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px; margin-top: 16px; font-size: 13px; }
+.bs-actions {
+  display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
+  position: sticky; bottom: 20px; padding: 16px;
+  background: rgba(255,255,255,.95); border-radius: 12px;
+  box-shadow: 0 -4px 12px rgba(15,31,61,.06);
+}
+.btn-add-bloc {
+  width: 100%; padding: 10px; background: #f1f5f9; border: 1px dashed #94a3b8;
+  border-radius: 8px; cursor: pointer; color: #475569; font-size: 13px;
+}
+.btn-add-bloc:hover { background: #e2e8f0; color: #0f1f3d; }
+.bsm-bloc-item {
+  padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 8px; margin-bottom: 10px; position: relative;
+}
+.bsm-bloc-item .btn-remove-bloc {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: 0; color: #94a3b8; font-size: 18px; cursor: pointer;
+}
+.bsm-bloc-item .btn-remove-bloc:hover { color: #dc2626; }
+.bsm-bloc-item .bs-label { margin-top: 6px; }
+.bsm-chiffre-toggle {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-size: 12px; color: #64748b;
+}
+/* Assistant flottant : place au-dessus des CTA + separe des barres bas de page */
+.fab-assistant {
+  position: fixed; bottom: 92px; right: 20px; z-index: 950;
+  width: 52px; height: 52px; border-radius: 50%; border: 0;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff;
+  font-size: 22px; cursor: pointer; box-shadow: 0 6px 20px rgba(37,99,235,.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, box-shadow .15s;
+}
+/* Laisser de la place a la FAB dans la CTA du miroir */
+.cta-bar { padding-right: 90px; }
+.fab-assistant:hover { transform: scale(1.05); box-shadow: 0 8px 26px rgba(37,99,235,.55); }
+.assistant-float {
+  position: fixed; bottom: 90px; right: 20px; z-index: 900;
+  width: 380px; max-width: calc(100vw - 40px);
+  height: 520px; max-height: calc(100vh - 130px);
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(15,31,61,.20);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.assistant-float-head {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+}
+.assistant-float-head .assistant-avatar { width: 32px; height: 32px; }
+.btn-close-assistant {
+  margin-left: auto; background: none; border: 0; font-size: 22px;
+  color: #64748b; cursor: pointer; line-height: 1; padding: 0 4px;
+}
+.btn-close-assistant:hover { color: #0f1f3d; }
+.assistant-tabs {
+  display: flex; border-bottom: 1px solid #e2e8f0; background: #f1f5f9;
+}
+.assistant-tab {
+  flex: 1; padding: 10px; background: none; border: 0; cursor: pointer;
+  font-size: 13px; color: #64748b; border-bottom: 2px solid transparent;
+}
+.assistant-tab.active { color: #1d4ed8; border-bottom-color: #2563eb; background: #fff; }
+.assistant-tab-content { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.assistant-tab-content .chat-body { flex: 1; overflow-y: auto; padding: 12px; }
+.assistant-tab-content .chat-input-row { border-top: 1px solid #e2e8f0; padding: 8px; }
+@media (max-width: 640px) {
+  .assistant-float { right: 10px; bottom: 80px; width: calc(100vw - 20px); height: calc(100vh - 100px); }
+}
+/* Groupement / scroll de la liste des sources */
+.source-group-sep {
+  font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px;
+  padding: 8px 4px 4px 4px; margin-top: 4px; border-bottom: 1px dashed #e2e8f0;
+}
+.source-group-sep:first-child { margin-top: 0; padding-top: 0; }
+.source-item.session-new { background: #eff6ff; border-color: #bfdbfe; }
+#source-list-reference, #source-list-private {
+  max-height: 260px; overflow-y: auto; padding-right: 4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────────── -->
+<nav>
+  <div class="logo" onclick="goHome()" style="cursor:pointer" title="Retour à l'accueil">Bah<span>yo</span></div>
+  <div class="nav-right">
+    <div class="nav-step">
+      <span class="step" id="step1" onclick="navToStep('screen-upload')" style="cursor:pointer" title="Sources : fichiers, URL, saisie manuelle">1 · Sources</span>
+      <span class="nav-sep">›</span>
+      <span class="step" id="step2" onclick="navToStep('screen-results')" style="cursor:pointer" title="BioSkills extraits (retenus + écartés)">2 · Bioskills</span>
+      <span class="nav-sep">›</span>
+      <span class="step" id="step3" onclick="navToStep('screen-portefeuille')" style="cursor:pointer" title="Portefeuille : BS retenus, avec évaluation et cote">3 · Portefeuille</span>
+      <span class="nav-info-indicator" id="nav-info-pct" title="Quantité d'information capturée dans le portefeuille par rapport aux sources" style="display:none">📊 <span id="nav-info-val">— %</span></span>
+    </div>
+    <div class="bah-balance" title="Solde de tokens Bahyo (BAH) — attribués lors de la publication du portefeuille sur la Bourse (Étage 2)">💠 0 BAH</div>
+    <div class="avatar-wrap" style="position:relative">
+      <div class="avatar" onclick="toggleAvatarMenu()" style="cursor:pointer" title="Menu compte">FP</div>
+      <div id="avatar-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(15,31,61,.14);min-width:220px;z-index:1000;overflow:hidden">
+        <div id="avatar-menu-email" style="padding:10px 14px;font-size:12px;color:#6b7280;border-bottom:1px solid #f1f5f9;word-break:break-all"></div>
+        <button onclick="showCompte()" style="display:block;width:100%;padding:10px 14px;text-align:left;background:none;border:0;cursor:pointer;font-size:14px;color:#0f1f3d">👤 Mon compte</button>
+        <button onclick="doLogout()"    style="display:block;width:100%;padding:10px 14px;text-align:left;background:none;border:0;cursor:pointer;font-size:14px;color:#0f1f3d;border-top:1px solid #f1f5f9">↩ Se déconnecter</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 0 — AUTH                                           -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-auth">
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-card-head">
+      <div class="auth-logo">Bah<span>yo</span></div>
+      <div class="auth-logo-sub">Bourse des compétences professionnelles</div>
+    </div>
+    <div class="auth-card-body">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="authTab('login')">Connexion</button>
+        <button class="auth-tab" id="tab-register" onclick="authTab('register')">Créer un compte</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="form-login">
+        <div class="auth-form">
+          <div class="auth-field">
+            <label class="auth-label" for="login-email">Email</label>
+            <input class="auth-input" id="login-email" type="email"
+              placeholder="vous@exemple.fr" autocomplete="email">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="login-pwd">Mot de passe</label>
+            <div class="pwd-wrap">
+              <input class="auth-input" id="login-pwd" type="password"
+                placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="pwd-eye" onclick="togglePwd('login-pwd',this)" title="Afficher">👁</button>
+            </div>
+          </div>
+          <div class="auth-error" id="login-error">Email ou mot de passe incorrect.</div>
+          <!-- Zone NDA affichee UNIQUEMENT si le serveur signale must_resign_nda -->
+          <div class="auth-rgpd" id="login-nda-zone" style="display:none;margin-top:8px">
+            <input type="checkbox" id="login-nda-check" onclick="return preventNdaCheckBypass(event)">
+            <label for="login-nda-check">Je reconnais avoir pris connaissance et accepté l'<a onclick="showNda()" style="cursor:pointer;color:var(--blue);font-weight:600">accord de confidentialité Bahyo</a> (cliquez pour lire).</label>
+          </div>
+          <button class="btn-auth" onclick="doLogin()">Se connecter →</button>
+          <div class="auth-hint">
+            Mot de passe oublié ? <a style="cursor:pointer" onclick="showForgot()">Réinitialiser</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="form-register" style="display:none">
+        <div class="auth-form">
+          <div class="auth-field">
+            <label class="auth-label" for="reg-email">Email de connexion</label>
+            <input class="auth-input" id="reg-email" type="email" placeholder="vous@exemple.fr" autocomplete="email">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-name">Nom complet <span style="font-weight:400;color:#9ca3af">(affiché dans votre profil)</span></label>
+            <input class="auth-input" id="reg-name" type="text" placeholder="Prénom Nom" autocomplete="name">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-pwd">Mot de passe</label>
+            <div class="pwd-wrap">
+              <input class="auth-input" id="reg-pwd" type="password" placeholder="8 caractères minimum">
+              <button type="button" class="pwd-eye" onclick="togglePwd('reg-pwd',this)" title="Afficher">👁</button>
+            </div>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label" for="reg-ln">Profil LinkedIn <span style="font-weight:400;color:#9ca3af">(facultatif)</span></label>
+            <input class="auth-input" id="reg-ln" type="url" placeholder="https://linkedin.com/in/votre-profil">
+          </div>
+          <div class="auth-rgpd">
+            <input type="checkbox" id="rgpd-check">
+            <label for="rgpd-check">J'accepte que Bahyo traite mes données pour construire et valoriser mon portefeuille de compétences.</label>
+          </div>
+          <div class="auth-rgpd">
+            <input type="checkbox" id="nda-check" onclick="return preventNdaCheckBypass(event)">
+            <label for="nda-check">Je reconnais avoir pris connaissance et accepté l'<a onclick="showNda()" style="cursor:pointer;color:var(--blue);font-weight:600">accord de confidentialité Bahyo</a> (obligatoire — cliquez pour lire).</label>
+          </div>
+          <div class="auth-error" id="reg-error">Veuillez remplir tous les champs obligatoires.</div>
+          <button class="btn-auth" onclick="doRegister()">Créer mon compte →</button>
+        </div>
+      </div>
+
+      <!-- EMAIL SENT (post-register) -->
+      <div id="form-email-sent" style="display:none">
+        <div class="auth-form" style="text-align:center;padding:24px 0">
+          <div style="font-size:52px;margin-bottom:16px">📬</div>
+          <h3 style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:8px">Vérifiez votre boîte mail</h3>
+          <p style="color:var(--text-sm);font-size:14px;margin-bottom:20px">
+            Un lien de confirmation a été envoyé à<br>
+            <strong id="sent-email" style="color:var(--navy)"></strong>
+          </p>
+          <div class="auth-hint">
+            Pas reçu ? <a style="cursor:pointer" onclick="doResendVerification()">Renvoyer l'email</a>
+          </div>
+          <div id="resend-ok" style="display:none;color:var(--green);font-size:13px;margin-top:8px">✓ Email renvoyé !</div>
+        </div>
+      </div>
+
+    </div><!-- /auth-card-body -->
+  </div><!-- /auth-card -->
+</div><!-- /auth-wrap -->
+</div><!-- /screen-auth -->
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 0c — CHANGEMENT DE MOT DE PASSE (1er login)        -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-change-password">
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-card-head">
+      <div class="auth-logo">Bah<span>yo</span></div>
+      <div class="auth-logo-sub">Choisissez votre mot de passe</div>
+    </div>
+    <div class="auth-card-body">
+      <div class="auth-form">
+        <p style="color:var(--text-sm);font-size:13px;margin-bottom:20px;line-height:1.5">
+          Pour sécuriser votre compte, définissez un mot de passe personnel lors de votre première connexion.
+        </p>
+        <div class="auth-field">
+          <label class="auth-label" for="chg-pwd1">Nouveau mot de passe</label>
+          <div class="pwd-wrap">
+            <input class="auth-input" id="chg-pwd1" type="password"
+              placeholder="8 caractères minimum" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="togglePwd('chg-pwd1',this)" title="Afficher">👁</button>
+          </div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="chg-pwd2">Confirmer le mot de passe</label>
+          <div class="pwd-wrap">
+            <input class="auth-input" id="chg-pwd2" type="password"
+              placeholder="Répétez le mot de passe" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="togglePwd('chg-pwd2',this)" title="Afficher">👁</button>
+          </div>
+        </div>
+        <div class="auth-error" id="chg-error"></div>
+        <button class="btn-auth" onclick="doSetPassword()">Valider mon mot de passe →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 0d — MOT DE PASSE OUBLIÉ (demande de lien)         -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-forgot">
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-card-head">
+      <div class="auth-logo">Bah<span>yo</span></div>
+      <div class="auth-logo-sub">Réinitialisation du mot de passe</div>
+    </div>
+    <div class="auth-card-body">
+      <div class="auth-form">
+        <p style="color:var(--text-sm);font-size:13px;margin-bottom:20px;line-height:1.5">
+          Entrez l'adresse email de votre compte. Si un compte existe, vous recevrez un lien pour définir un nouveau mot de passe (valable 30 minutes).
+        </p>
+        <div class="auth-field">
+          <label class="auth-label" for="forgot-email">Email</label>
+          <input class="auth-input" id="forgot-email" type="email" placeholder="vous@exemple.fr" autocomplete="email">
+        </div>
+        <div class="auth-error" id="forgot-error"></div>
+        <div class="auth-ok" id="forgot-ok" style="display:none;padding:10px;background:var(--green-lt);color:var(--green);border-radius:8px;font-size:13px;margin-bottom:12px">
+          ✓ Si un compte existe pour cette adresse, un email a été envoyé.
+        </div>
+        <button class="btn-auth" onclick="doForgotPassword()">Envoyer le lien →</button>
+        <div class="auth-hint" style="margin-top:14px">
+          <a style="cursor:pointer" onclick="showScreen('screen-auth')">← Retour à la connexion</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 0e — NOUVEAU MOT DE PASSE (depuis lien email)      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-reset-password">
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-card-head">
+      <div class="auth-logo">Bah<span>yo</span></div>
+      <div class="auth-logo-sub">Définir un nouveau mot de passe</div>
+    </div>
+    <div class="auth-card-body">
+      <div class="auth-form">
+        <p style="color:var(--text-sm);font-size:13px;margin-bottom:20px;line-height:1.5">
+          Choisissez un nouveau mot de passe pour votre compte Bahyo.
+        </p>
+        <div class="auth-field">
+          <label class="auth-label" for="rst-pwd1">Nouveau mot de passe</label>
+          <div class="pwd-wrap">
+            <input class="auth-input" id="rst-pwd1" type="password"
+              placeholder="8 caractères minimum" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="togglePwd('rst-pwd1',this)" title="Afficher">👁</button>
+          </div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="rst-pwd2">Confirmer le mot de passe</label>
+          <div class="pwd-wrap">
+            <input class="auth-input" id="rst-pwd2" type="password"
+              placeholder="Répétez le mot de passe" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="togglePwd('rst-pwd2',this)" title="Afficher">👁</button>
+          </div>
+        </div>
+        <div class="auth-error" id="rst-error"></div>
+        <button class="btn-auth" onclick="doResetPassword()">Valider le nouveau mot de passe →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN — SAISIE MANUELLE D'UN BS                          -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-bs-manuel">
+<div class="bs-manuel-wrap">
+  <div class="bs-manuel-head">
+    <h1>Saisir un BioSkill — méthode 3A</h1>
+    <p>Chaque BioSkill s'appuie sur <strong>3 éléments</strong> : une <strong>Aptitude</strong> (le savoir-faire), un <strong>Acte</strong> (l'action concrète qui l'atteste), une <strong>Attestation</strong> (le tiers ou le document qui la valide).</p>
+    <button class="btn-back-bs" onclick="showScreen('screen-upload')">← Retour aux sources</button>
+  </div>
+
+  <div class="bs-manuel-body">
+
+    <!-- BLOC A1 — APTITUDE -->
+    <div class="bs-block bs-block-main">
+      <h3><span class="bs-3a-badge">A1</span> Aptitude <span class="bs-req">*</span>
+        <span class="bs-3a-hint">le savoir-faire, en une phrase</span>
+      </h3>
+      <input class="bs-input" id="bsm-aptitude" type="text"
+        placeholder="Ex : Piloter un projet complexe multi-équipes" maxlength="200">
+    </div>
+
+    <!-- BLOC A2 — ACTE -->
+    <div class="bs-block">
+      <h3><span class="bs-3a-badge">A2</span> Acte
+        <span class="bs-3a-hint">l'action concrète, avec chiffres et contexte</span>
+      </h3>
+      <label class="bs-label">Description de l'acte</label>
+      <input class="bs-input" id="bsm-acte" type="text"
+        placeholder="Ex : Ai coordonné 12 équipes sur 18 mois pour livrer…" maxlength="500">
+
+      <label class="bs-label">Extrait / phrase source (facultatif)</label>
+      <textarea class="bs-input bs-textarea" id="bsm-extrait" rows="3"
+        placeholder="La phrase de votre CV / profil / document qui décrit cet acte" maxlength="1000"></textarea>
+    </div>
+
+    <!-- BLOC A3 — ATTESTATION -->
+    <div class="bs-block">
+      <h3><span class="bs-3a-badge">A3</span> Attestation
+        <span class="bs-3a-hint">qui ou quoi valide cet acte ?</span>
+      </h3>
+      <label class="bs-label">Tiers attestant</label>
+      <input class="bs-input" id="bsm-tiers" type="text"
+        placeholder="Ex : DG Airbus, Prof. J. Dupont (Sciences Po), Éditeur XYZ…" maxlength="200">
+    </div>
+
+    <!-- ILLUSTRATIONS — blocs étendus (facultatifs, cryptables) -->
+    <div class="bs-block bs-block-illustrations">
+      <h3>Illustrations <span class="bs-3a-hint">projet, témoignage, recommandation… (facultatif)</span></h3>
+      <p class="bs-help">Chaque illustration renforce un ou plusieurs des 3A. Ex : description d'un projet où l'expertise a été mobilisée, extrait de recommandation, résumé de publication. Cochez <strong>🔒 privé chiffré</strong> pour ne rendre public que le titre (Étage 2 — la Bourse).</p>
+      <div id="bsm-blocs-etendus"></div>
+      <button type="button" class="btn-add-bloc" onclick="bsmAddBloc()">+ Ajouter une illustration</button>
+    </div>
+
+    <!-- BLOC QUALIFICATION -->
+    <div class="bs-block">
+      <h3>Qualification <span class="bs-3a-hint">force et rang</span></h3>
+
+      <label class="bs-label">Force de preuve</label>
+      <select class="bs-input" id="bsm-force">
+        <option value="verifiee">Vérifiée — attestation solide (diplôme, contrat, publication)</option>
+        <option value="potentielle">Potentielle — preuve indirecte (mention, projet listé)</option>
+        <option value="detaillee">Détaillée — récit riche, sans tiers indépendant</option>
+        <option value="candidat" selected>Candidate — première mention, à consolider</option>
+      </select>
+
+      <label class="bs-label">Rang</label>
+      <select class="bs-input" id="bsm-rang">
+        <option value="PRIMAIRE" selected>Primaire — compétence cœur de métier</option>
+        <option value="SECONDAIRE">Secondaire — compétence utile</option>
+        <option value="ANECDOTIQUE">Anecdotique — mention marginale</option>
+      </select>
+
+      <label class="bs-label">Note personnelle (facultatif)</label>
+      <textarea class="bs-input bs-textarea" id="bsm-note" rows="2"
+        placeholder="Contexte, précisions à conserver pour vous"></textarea>
+    </div>
+
+    <div class="bs-error" id="bsm-error" style="display:none"></div>
+
+    <div class="bs-actions">
+      <button class="btn-secondary" onclick="showScreen('screen-upload')">Annuler</button>
+      <button class="btn-primary" onclick="doSaveBsManuel()">Enregistrer le BS →</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 0b — ONBOARDING MEMBRES 2017                       -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-onboarding">
+<div class="onboarding-wrap">
+  <div class="onboarding-card">
+
+    <div class="onboarding-head">
+      <div class="onboarding-avatar-wrap" id="ob-avatar">FP</div>
+      <div class="onboarding-head-text">
+        <h2>Bienvenue de retour, <span id="ob-name">Francis</span> !</h2>
+        <p>Membre depuis 2017 · Votre compte a été retrouvé. Quelques minutes pour réactiver votre portefeuille.</p>
+      </div>
+    </div>
+
+    <div class="onboarding-body">
+
+      <!-- Ce qui change -->
+      <div class="ob-section">
+        <div class="ob-section-title">Ce qui est nouveau</div>
+        <div class="ob-new-box">
+          Bahyo a évolué. <strong>L'Étage 1</strong> extrait maintenant vos BioSkills <em>directement depuis vos textes</em> — plus de matching algorithmique sur un catalogue. Chaque compétence est qualifiée par sa <strong>force de preuve</strong> (vérifiée, potentielle, détaillée, candidate) et tracée jusqu'à la phrase de votre profil qui l'ancre.<br><br>
+          Pour lancer cette extraction, nous avons besoin de votre profil actualisé.
+        </div>
+      </div>
+
+      <!-- Profil LinkedIn détecté -->
+      <div class="ob-section">
+        <div class="ob-section-title">Votre profil LinkedIn détecté</div>
+        <div class="ob-ln-row">
+          <div class="ob-ln-dot"></div>
+          <div class="ob-ln-url" id="ob-ln-url">linkedin.com/in/francis-portogallo</div>
+          <div class="ob-ln-tag">Fil directeur</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-sm)">
+          Nous utilisons cette URL uniquement comme référence d'identité. Pour récupérer le contenu de votre profil, vous devez télécharger votre export depuis LinkedIn.
+        </div>
+      </div>
+
+      <!-- Guide export -->
+      <div class="ob-section">
+        <div class="ob-section-title">Comment exporter votre profil LinkedIn</div>
+        <div class="ob-steps">
+          <div class="ob-step">
+            <div class="ob-step-num">1</div>
+            <div>Cliquez sur <strong>"Ouvrir LinkedIn → Export"</strong> ci-dessous — vous arrivez directement sur la page d'export de vos données.</div>
+          </div>
+          <div class="ob-step">
+            <div class="ob-step-num">2</div>
+            <div>Sélectionnez <strong>"Choisir les données"</strong> puis cochez : <em>Profil, Postes, Formation, Compétences</em>.</div>
+          </div>
+          <div class="ob-step">
+            <div class="ob-step-num">3</div>
+            <div>Cliquez <strong>"Demander une archive"</strong>. LinkedIn vous envoie un email sous quelques minutes à quelques heures.</div>
+          </div>
+          <div class="ob-step">
+            <div class="ob-step-num">4</div>
+            <div>Téléchargez le ZIP reçu par email, revenez ici et déposez-le dans la zone de chargement.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Consentement RGPD -->
+      <div class="ob-section">
+        <div class="ob-section-title">Consentement — traitement mis à jour</div>
+        <div class="ob-consent">
+          Bahyo traitera votre export LinkedIn pour en extraire vos BioSkills. Ces données restent confidentielles et ne sont partagées qu'avec vous. Vous pouvez à tout moment supprimer votre portefeuille depuis votre espace.
+          <div class="ob-consent-check">
+            <input type="checkbox" id="ob-consent-check" onchange="updateObCta()">
+            <label for="ob-consent-check">Je consens à ce traitement et confirme que les données que je fournis me concernent personnellement.</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="ob-actions">
+        <button class="btn-ob-ln" id="btn-ob-ln" disabled
+          onclick="openLinkedInExport()">
+          <span>🔗</span> Ouvrir LinkedIn → Export
+        </button>
+        <button class="btn-ob-skip" onclick="goToUploadFromOnboarding()">
+          J'ai déjà mon fichier →
+        </button>
+      </div>
+
+    </div><!-- /onboarding-body -->
+  </div><!-- /onboarding-card -->
+</div><!-- /onboarding-wrap -->
+
+<!-- CTA sticky pour continuer après export -->
+<div class="upload-cta" id="ob-continue-bar" style="display:none">
+  <div class="upload-cta-info">Export téléchargé ? Déposez le ZIP dans l'étape suivante.</div>
+  <button class="btn-analyze" onclick="goToUploadFromOnboarding()">Continuer vers l'import →</button>
+</div>
+
+</div><!-- /screen-onboarding -->
+
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 1 — SOURCES                                        -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-upload">
+<div class="upload-layout">
+
+  <div class="upload-hero">
+    <h1>Alimentez votre portefeuille</h1>
+    <p>Commencez par votre profil public, puis ajoutez des fichiers privés pour enrichir l'analyse.</p>
+  </div>
+
+  <!-- Fil directeur : LN/IG + URL + drop ZIP -->
+  <div class="section-card">
+    <div class="section-card-head">
+      <div class="section-card-icon ln">🔗</div>
+      <div>
+        <div class="section-card-title">Profil public</div>
+        <div class="section-card-sub">Choisissez le réseau, puis collez l'URL ou déposez l'export ZIP</div>
+      </div>
+      <div class="section-card-badge required">Requis</div>
+    </div>
+    <div class="section-card-body">
+      <div class="social-tabs">
+        <div class="social-tab ln-tab active" onclick="chipReseau('ln', this)" title="Ouvre la page LinkedIn de téléchargement de votre archive dans un nouvel onglet. Une fois le ZIP reçu par email, revenez ici et cliquez sur « 📎 Choisir un fichier ».">
+          <div class="dot"></div> LinkedIn <span class="chip-arrow">↗</span>
+        </div>
+        <div class="social-tab ig-tab" onclick="chipReseau('ig', this)" title="Ouvre la page Instagram de téléchargement de votre archive dans un nouvel onglet. Une fois le ZIP reçu, revenez ici et cliquez sur « 📎 Choisir un fichier ».">
+          <div class="dot"></div> Instagram <span class="chip-arrow">↗</span>
+        </div>
+      </div>
+
+      <div class="source-url-row">
+        <input class="source-url-input" id="profile-url"
+          type="url" placeholder="Collez l'URL de votre profil, ou laissez vide pour choisir un fichier ZIP/PDF"
+          oninput="checkAnalyzeReady(); majBoutonImporter()"
+          onkeydown="if(event.key==='Enter')importSmart()">
+        <input type="file" id="profile-file-picker" style="display:none"
+          accept=".zip,.pdf,.html,.htm" onchange="onProfileFileChosen(event)">
+        <button class="btn-import" id="btn-import-url" onclick="importSmart()">📎 Choisir un fichier</button>
+      </div>
+
+      <div class="source-list" id="source-list-reference"></div>
+    </div>
+  </div>
+
+  <!-- Fichiers complémentaires (uniquement CV, lettres, notes...) -->
+  <div class="section-card">
+    <div class="section-card-head">
+      <div class="section-card-icon files">🔒</div>
+      <div>
+        <div class="section-card-title">Fichiers complémentaires</div>
+        <div class="section-card-sub">CV, lettres, bilans, notes — enrichissent l'analyse sans être exposés</div>
+      </div>
+      <div class="section-card-badge optional">Facultatif</div>
+    </div>
+    <div class="section-card-body">
+      <div class="dropzone" id="drop-private"
+        ondragover="onDragOver(event,'drop-private')"
+        ondragleave="onDragLeave('drop-private')"
+        ondrop="onDrop(event,'libre')">
+        <input type="file" accept=".pdf,.doc,.docx,.txt" multiple onchange="onFileInput(event,'libre')">
+        <div class="dropzone-icon">🗂</div>
+        <div class="dropzone-label">Glissez vos fichiers ici</div>
+        <div class="dropzone-sub">CV, lettres de recommandation, notes de bilan, etc.</div>
+        <div class="dropzone-types">
+          <span class="type-chip">CV</span>
+          <span class="type-chip">DOCX</span>
+          <span class="type-chip">PDF</span>
+          <span class="type-chip">TXT</span>
+        </div>
+      </div>
+
+      <div class="priv-hint">
+        Vos fichiers privés sont chiffrés côté client. Bahyo n'expose que les compétences extraites.
+      </div>
+
+      <div class="source-list" id="source-list-private"></div>
+
+      <!-- Alternative aux fichiers : saisie manuelle d'un BS -->
+      <div class="section-divider-inline">
+        <span>ou</span>
+      </div>
+      <button type="button" class="btn-bs-manuel" onclick="openBsManuel()">
+        ✍️ Saisir un BioSkill directement (méthode 3A)
+      </button>
+      <div style="font-size:12px;color:#94a3b8;margin-top:6px;text-align:center">
+        Utile si vous voulez ajouter une compétence attestée par un projet, un témoignage, une recommandation…
+      </div>
+    </div>
+  </div>
+
+</div><!-- /upload-layout -->
+
+<!-- CTA upload -->
+<div class="upload-cta">
+  <div class="upload-cta-info" id="upload-info">
+    Ajoutez au moins un profil public pour démarrer.
+  </div>
+  <button class="btn-analyze" id="btn-analyze" onclick="startAnalysis()">
+    Analyser mes sources →
+  </button>
+</div>
+</div><!-- /screen-upload -->
+
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN INTERMÉDIAIRE — ANALYSE EN COURS                   -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-analyzing">
+  <div class="analyzing-screen">
+    <div class="spinner"></div>
+    <div class="analyzing-label">Extraction en cours…</div>
+    <div class="analyzing-steps">
+      <div class="analyzing-step" id="astep1">① Segmentation du texte en candidats</div>
+      <div class="analyzing-step" id="astep2">② Définition — savoir-faire vs fonction</div>
+      <div class="analyzing-step" id="astep3">③ Qualification de la force de chaque BS</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 2 — RÉSULTATS                                      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-results">
+<div class="results-layout">
+
+  <!-- ── MAIN ─────────────────────────────────────────────── -->
+  <div class="main-col">
+
+    <!-- Bande sources -->
+    <div class="sources-bar">
+      <span class="sources-bar-label">Sources</span>
+      <div class="sources-bar-chips" id="sources-bar-chips"></div>
+      <button class="btn-re-analyze" onclick="goToUpload()">+ Ajouter / Relancer</button>
+    </div>
+
+    <!-- Miroir -->
+    <div class="miroir-card">
+      <div class="miroir-label">Miroir Bahyo</div>
+      <div class="miroir-title">Voici ce que vos textes révèlent</div>
+      <div class="miroir-sub" id="source-resume"></div>
+      <div class="stats-row" id="stats-row"></div>
+    </div>
+
+    <!-- BioSkills retenus -->
+    <div class="section-head">
+      <div class="section-title">BioSkills extraits</div>
+      <div class="section-count" id="retenus-count"></div>
+    </div>
+    <div class="bs-list" id="bs-list"></div>
+
+    <!-- Écartés -->
+    <div class="ecartes-section">
+      <button class="ecartes-toggle" onclick="toggleEcartes(this)">
+        <div class="ecartes-toggle-left">
+          <span class="ecartes-label">Candidats écartés</span>
+          <span class="ecartes-count" id="ecartes-count"></span>
+          <span class="ecartes-hint">— cliquez pour challenger</span>
+        </div>
+        <span class="ecartes-chevron" id="ecartes-chevron">▼</span>
+      </button>
+      <div class="ecartes-body" id="ecartes-body"></div>
+    </div>
+
+  </div><!-- /main-col -->
+
+  <!-- ── SIDEBAR ───────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Score -->
+    <div class="score-card">
+      <div class="score-title">Score portefeuille</div>
+      <div class="score-ring-wrap">
+        <div class="score-ring" id="score-ring">
+          <span class="score-value" id="score-value">0</span>
+        </div>
+        <div class="score-info">
+          <div class="score-label" id="score-label">En construction</div>
+          <div class="score-sub" id="score-sub">Validez des BioSkills pour l'activer</div>
+        </div>
+      </div>
+      <div class="force-bars" id="force-bars"></div>
+    </div>
+
+    <!-- Sources utilisées -->
+    <div class="sources-sidebar">
+      <div class="sources-sidebar-title">Sources utilisées</div>
+      <div class="sources-sidebar-list" id="sources-sidebar-list"></div>
+      <button class="btn-add-source" onclick="goToUpload()">+ Ajouter une source</button>
+      <button class="btn-add-source" id="btn-relancer-analyse" onclick="relancerAnalyse()" style="margin-top:8px;background:#f0fdf4;color:#166534;border-color:#bbf7d0">🔄 Relancer l'analyse</button>
+      <div id="portfolio-last-extraction" style="font-size:11px;color:#94a3b8;margin-top:6px;text-align:center"></div>
+
+      <!-- Évaluateur 3A -->
+      <div class="evaluateur-3a">
+        <div class="evaluateur-title">Complétude 3A</div>
+        <div class="evaluateur-row">
+          <span class="evaluateur-label">Aptitude</span>
+          <div class="evaluateur-bar-wrap"><div class="evaluateur-bar" id="eval-aptitude" style="width:0%"></div></div>
+          <span class="evaluateur-pct" id="eval-aptitude-pct">0%</span>
+        </div>
+        <div class="evaluateur-row">
+          <span class="evaluateur-label">Acte</span>
+          <div class="evaluateur-bar-wrap"><div class="evaluateur-bar" id="eval-acte" style="width:0%"></div></div>
+          <span class="evaluateur-pct" id="eval-acte-pct">0%</span>
+        </div>
+        <div class="evaluateur-row">
+          <span class="evaluateur-label">Attestation</span>
+          <div class="evaluateur-bar-wrap"><div class="evaluateur-bar" id="eval-attestation" style="width:0%"></div></div>
+          <span class="evaluateur-pct" id="eval-attestation-pct">0%</span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+</div><!-- /results-layout -->
+
+<!-- CTA résultats -->
+<div class="cta-bar">
+  <div class="cta-info">
+    <strong id="cta-validated">0</strong> BioSkill(s) sélectionné(s) sur <span id="cta-total">0</span>
+  </div>
+  <div class="cta-actions">
+    <button class="btn-secondary" onclick="selectAll()">Tout valider</button>
+    <button class="btn-primary" onclick="navToStep('screen-portefeuille')">
+      Voir le portefeuille →
+    </button>
+  </div>
+</div>
+</div><!-- /screen-results -->
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN — MON COMPTE (juridique · fonctionnel · financier) -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-compte">
+  <div class="compte-wrap">
+    <div class="compte-head">
+      <h1>👤 Mon compte</h1>
+      <button class="btn-back-bs" onclick="showScreen('screen-portefeuille')">← Retour</button>
+    </div>
+
+    <!-- Identité juridique -->
+    <div class="compte-block">
+      <h3>Identité</h3>
+      <div class="compte-row"><span class="compte-label">Email de connexion</span><span class="compte-val" id="cpt-email">—</span></div>
+      <div class="compte-row"><span class="compte-label">Nom affiché</span><span class="compte-val" id="cpt-name">—</span></div>
+      <div class="compte-row"><span class="compte-label">Profil LinkedIn</span><span class="compte-val" id="cpt-ln">—</span></div>
+      <div class="compte-row"><span class="compte-label">Statut du compte</span><span class="compte-val" id="cpt-statut">Actif · Approuvé</span></div>
+      <div class="compte-row"><span class="compte-label">Créé le</span><span class="compte-val" id="cpt-created">—</span></div>
+      <div class="compte-actions">
+        <button class="btn-secondary" onclick="doForgotPasswordFromCompte()">🔑 Changer mon mot de passe</button>
+        <button class="btn-danger" onclick="alert('Suppression du compte — à implémenter côté serveur')">🗑 Supprimer mon compte</button>
+      </div>
+    </div>
+
+    <!-- Portefeuille (fonctionnel) -->
+    <div class="compte-block">
+      <h3>Mon portefeuille</h3>
+      <div class="compte-row"><span class="compte-label">BioSkills en cours</span><span class="compte-val" id="cpt-bs-count">0</span></div>
+      <div class="compte-row"><span class="compte-label">Cote globale</span><span class="compte-val" id="cpt-cote">—</span></div>
+      <div class="compte-row"><span class="compte-label">Statut du portefeuille</span><span class="compte-val" id="cpt-pf-statut">Brouillon</span></div>
+      <div class="compte-row"><span class="compte-label">Dernière analyse</span><span class="compte-val" id="cpt-last-analyse">—</span></div>
+    </div>
+
+    <!-- Porte-monnaie financier -->
+    <div class="compte-block">
+      <h3>💠 Porte-monnaie BAH</h3>
+      <div class="wallet-card">
+        <div class="wallet-solde"><span id="cpt-wallet">0</span> BAH</div>
+        <div class="wallet-sub">Tokens Bahyo — attribués à la publication du portefeuille (Étage 2)</div>
+      </div>
+      <div class="compte-row"><span class="compte-label">Total gagné</span><span class="compte-val" id="cpt-w-gagne">0</span></div>
+      <div class="compte-row"><span class="compte-label">Total dépensé</span><span class="compte-val" id="cpt-w-depense">0</span></div>
+      <div class="compte-row"><span class="compte-label">Allocation initiale</span><span class="compte-val" id="cpt-w-alloc">Non éligible pour l'instant</span></div>
+      <p class="compte-hint">💡 L'allocation initiale se fait à la publication de votre premier portefeuille sur la Bourse Bahyo, sous conditions de score minimum (voir <a href="#" onclick="alert('Conditions à définir dans le contrat Étage 2');return false">conditions</a>).</p>
+    </div>
+
+    <!-- Historique transactions -->
+    <div class="compte-block">
+      <h3>Historique</h3>
+      <table class="pf-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Description</th></tr></thead>
+        <tbody id="cpt-tx-tbody">
+          <tr class="pf-empty"><td colspan="4">Aucune transaction pour l'instant.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  BLOC GESTION — visible uniquement pour is_superadmin   -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="compte-block admin-block" id="admin-block" style="display:none">
+      <h3>🛡 Gestion (superadmin)</h3>
+
+      <!-- Statistiques -->
+      <div class="admin-stats" id="admin-stats"></div>
+
+      <!-- Onglets internes -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-atab="wl" onclick="switchAdminTab('wl',this)">Liste blanche</button>
+        <button class="admin-tab" data-atab="pending" onclick="switchAdminTab('pending',this)">Comptes en attente</button>
+        <button class="admin-tab" data-atab="users" onclick="switchAdminTab('users',this)">Tous les comptes</button>
+        <button class="admin-tab" data-atab="nda" onclick="switchAdminTab('nda',this)">NDA</button>
+      </div>
+
+      <!-- Whitelist -->
+      <div class="admin-content" id="admin-wl">
+        <div class="admin-row-add">
+          <input class="bs-input" id="wl-email" type="email" placeholder="email@exemple.fr">
+          <input class="bs-input" id="wl-motif" type="text" placeholder="Motif (facultatif)">
+          <button class="btn-primary" onclick="wlAdd()">+ Ajouter</button>
+        </div>
+        <table class="pf-table" style="margin-top:10px">
+          <thead><tr><th>Email</th><th>Motif</th><th>Ajouté par</th><th>Depuis</th><th></th></tr></thead>
+          <tbody id="wl-tbody"><tr class="pf-empty"><td colspan="5">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Pending -->
+      <div class="admin-content" id="admin-pending" style="display:none">
+        <table class="pf-table">
+          <thead><tr><th>Email</th><th>Nom</th><th>Inscrit</th><th>NDA IP</th><th>Actions</th></tr></thead>
+          <tbody id="pending-tbody"><tr class="pf-empty"><td colspan="5">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Tous les comptes -->
+      <div class="admin-content" id="admin-users" style="display:none">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <label class="bs-label" style="margin:0">Filtre :</label>
+          <select class="bs-input" id="users-filter" style="width:180px" onchange="loadUsers()">
+            <option value="all">Tous</option>
+            <option value="actif" selected>Actifs</option>
+            <option value="suspendu">Suspendus</option>
+            <option value="ferme">Fermés</option>
+            <option value="en_attente">En attente d'approbation</option>
+          </select>
+          <span style="flex:1"></span>
+          <button class="btn-secondary" onclick="loadUsers()">Recharger</button>
+        </div>
+        <table class="pf-table">
+          <thead><tr><th>Email</th><th>Nom</th><th>Statut</th><th>NDA</th><th>Créé</th><th>Actions</th></tr></thead>
+          <tbody id="users-tbody"><tr class="pf-empty"><td colspan="6">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- NDA -->
+      <div class="admin-content" id="admin-nda" style="display:none">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+          <label class="bs-label" style="margin:0">Langue :</label>
+          <div class="nda-lang-toggle" style="margin:0">
+            <button class="active" id="nda-lang-fr" onclick="loadNdaAdmin('fr')">FR</button>
+            <button id="nda-lang-en" onclick="loadNdaAdmin('en')">EN</button>
+          </div>
+          <span style="flex:1"></span>
+          <label class="bs-label" style="margin:0">Version</label>
+          <input class="bs-input" id="nda-version" type="text" style="width:180px" placeholder="2026-09-01-v2">
+        </div>
+        <textarea class="bs-input bs-textarea" id="nda-texte" rows="14" placeholder="Texte de l'accord…"></textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+          <button class="btn-secondary" onclick="loadNdaAdmin(currentNdaLang)">Recharger</button>
+          <button class="btn-primary" onclick="publierNda()">Publier <span id="nda-lang-pub">FR</span></button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /screen-compte -->
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ÉCRAN 3 — PORTEFEUILLE (BS validés × Évaluation × Cote)  -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-portefeuille">
+  <div class="portefeuille-wrap">
+    <div class="portefeuille-head">
+      <h1>📊 Mon portefeuille</h1>
+      <div class="portefeuille-stats">
+        <div class="pf-stat">
+          <div class="pf-stat-label">BioSkills retenus</div>
+          <div class="pf-stat-value" id="pf-count">0</div>
+        </div>
+        <div class="pf-stat">
+          <div class="pf-stat-label">Qté d'info couverte</div>
+          <div class="pf-stat-value" id="pf-info-pct">— %</div>
+        </div>
+        <div class="pf-stat">
+          <div class="pf-stat-label">Cote globale</div>
+          <div class="pf-stat-value" id="pf-cote-globale">—</div>
+        </div>
+      </div>
+    </div>
+
+    <table class="pf-table">
+      <thead>
+        <tr>
+          <th style="width:60%">BioSkill</th>
+          <th style="width:15%">Évaluation</th>
+          <th style="width:15%">Cote</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody id="pf-tbody">
+        <tr class="pf-empty"><td colspan="4">Aucun BioSkill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:#2563eb;text-decoration:underline">Bioskills</a> pour en valider.</td></tr>
+      </tbody>
+    </table>
+    <p class="pf-hint">💡 Chaque BS peut être évalué (fiabilité 3A) et coté (valeur relative). La cote globale synthétise l'ensemble pour la publication à l'Étage 2.</p>
+  </div>
+</div><!-- /screen-portefeuille -->
+
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!--  ASSISTANT FLOTTANT (bulle globale)                       -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<button class="fab-assistant" id="fab-assistant" onclick="toggleAssistant()" title="Assistant Bahyo & Aide">
+  <span id="fab-icon">◈</span>
+</button>
+
+<div class="assistant-float" id="assistant-float" style="display:none">
+  <div class="assistant-float-head">
+    <div class="assistant-avatar">◈</div>
+    <div class="assistant-name">Assistant Bahyo</div>
+    <button class="btn-close-assistant" onclick="toggleAssistant()" title="Fermer">×</button>
+  </div>
+  <div class="assistant-tabs">
+    <button class="assistant-tab active" data-tab="chat" onclick="switchAssistantTab('chat', this)">💬 Chat</button>
+    <button class="assistant-tab" data-tab="help" onclick="switchAssistantTab('help', this)">💡 Aide</button>
+  </div>
+  <div class="assistant-tab-content" id="tab-chat">
+    <div class="chat-body" id="chat-body">
+      <div class="msg assistant">
+        Bonjour ! Je peux vous expliquer les BioSkills extraits de vos textes et vous aider à enrichir leur ancrage. Que souhaitez-vous savoir ?
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" type="text"
+        placeholder="Posez une question sur vos BS…"
+        onkeydown="if(event.key==='Enter') sendMsg()">
+      <button class="btn-send" onclick="sendMsg()">↑</button>
+    </div>
+  </div>
+  <div class="assistant-tab-content" id="tab-help" style="display:none">
+    <div style="padding:14px;overflow-y:auto;flex:1">
+      <h4 style="margin:0 0 10px 0;color:#0f1f3d">Télécharger mon export LinkedIn</h4>
+      <ol style="padding-left:20px;line-height:1.7;font-size:13px;color:#334155;margin:0 0 16px 0">
+        <li>Cliquez sur la chip <strong>LinkedIn</strong> dans l'écran Sources — la page d'export s'ouvre dans un nouvel onglet.</li>
+        <li>Sélectionnez <strong>« Choisir les données »</strong> puis cochez : Profil, Postes, Formation, Compétences.</li>
+        <li>Cliquez sur <strong>« Demander une archive »</strong>. LinkedIn vous enverra un email avec un lien (délai : quelques minutes à quelques heures).</li>
+        <li>Téléchargez le ZIP, revenez ici et déposez-le dans « Fichiers complémentaires » — Bahyo le détectera automatiquement.</li>
+      </ol>
+      <h4 style="margin:0 0 10px 0;color:#0f1f3d">Télécharger mon export Instagram</h4>
+      <ol style="padding-left:20px;line-height:1.7;font-size:13px;color:#334155;margin:0">
+        <li>Cliquez sur la chip <strong>Instagram</strong> dans l'écran Sources — la page d'export s'ouvre.</li>
+        <li>Sélectionnez <strong>« Informations sur le compte »</strong> puis format <strong>JSON</strong>.</li>
+        <li>Cliquez sur <strong>« Créer des fichiers »</strong>. Instagram vous enverra un email avec un lien.</li>
+        <li>Déposez le ZIP dans « Fichiers complémentaires » — détection automatique.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── LOGIQUE ─────────────────────────────────────────────── -->
+<script>
+// ── Mock data ─────────────────────────────────────────────────
+const PORTEFEUILLE = {
+  portfolio_brut: {
+    source_resume: "Profil d'un ingénieur informatique senior — parcours infrastructure, sécurité et développement (CV + texte libre).",
+    n_candidats: 11,
+    retenus: [
+      { id:"bs_001", aptitude:"Configuration d'une infrastructure à clés publiques (PKI/IGC)", acte:"configurer", force:"verifiee", tiers:"DGA", extrait:"Mise en place de la PKI de la DGA, livrée et réceptionnée en V1." },
+      { id:"bs_002", aptitude:"Migration d'infrastructure de messagerie Lotus Domino à grande échelle", acte:"migrer", force:"verifiee", tiers:"SITA et Equant", extrait:"En vue de la séparation de SITA et d'Equant, migration de l'infrastructure Groupware." },
+      { id:"bs_003", aptitude:"Optimisation des performances de bases de données PostgreSQL", acte:"optimiser", force:"verifiee", tiers:"MINEFI", extrait:"Dans le cadre de marchés de Support Logiciels Libres pour le MINEFI." },
+      { id:"bs_004", aptitude:"Développement d'application web de gestion de configuration logicielle (JEE)", acte:"développer", force:"potentielle", tiers:null, extrait:"Outil de gestion de configuration couvrant 12 environnements de production." },
+      { id:"bs_005", aptitude:"Architecture technique haute disponibilité (cluster, SAN, virtualisation)", acte:"architecturer", force:"detaillee", tiers:null, extrait:"Architecture Web haute disponibilité en cluster actif/actif." },
+      { id:"bs_006", aptitude:"Virtualisation de serveurs sous VMware vSphere", acte:"virtualiser", force:"detaillee", tiers:null, extrait:"Déploiement d'une plateforme vSphere multi-environnements." },
+      { id:"bs_007", aptitude:"Développement de tests automatiques de bout en bout (Python, Jenkins)", acte:"développer", force:"candidat", tiers:null, extrait:null }
+    ],
+    ecartes: [
+      { id:"bs_008", aptitude:"Direction de Business Unit (management, P&L, RH)", acte:"diriger", raison:"fonction", extrait:"Direction d'une Business Unit de 40 personnes, responsabilité P&L." },
+      { id:"bs_009", aptitude:"Management d'équipes techniques et pilotage de projets", acte:"manager", raison:"fonction", extrait:"Management d'équipes multiculturelles et pilotage de programmes." },
+      { id:"bs_010", aptitude:"Architecture et mise en place d'un CRM et d'un outil décisionnel", acte:"mettre en place", raison:"enveloppe_de_mission", extrait:"Architecture et mise en place d'un CRM et d'un outil décisionnel." },
+      { id:"bs_011", aptitude:"Assistance à maîtrise d'ouvrage (AMOA)", acte:"assister", raison:"fonction", extrait:"AMOA : recueil des besoins, rédaction de cahiers des charges, conduite du changement." }
+    ]
+  }
+};
+
+// ── Configuration API ─────────────────────────────────────────
+// Production : 'https://bahyo.net'
+// Développement local : '' (même origine) ou 'http://localhost:3000'
+const API_BASE = 'https://bsx.bahyo.net';
+
+// ── Base mock 2017 ────────────────────────────────────────────
+// En prod : vérifié via POST /auth/login → réponse { user, is_2017, ln_url }
+const MEMBRES_2017 = {
+  'ancien@bahyo.fr':   { name: 'Francis Portogallo', initials: 'FP', ln: 'linkedin.com/in/francis-portogallo' },
+  'membre@bahyo.fr':   { name: 'Marie Dupont',       initials: 'MD', ln: 'linkedin.com/in/marie-dupont-conseil' },
+  'test2017@test.fr':  { name: 'Jean Martin',        initials: 'JM', ln: 'linkedin.com/in/jean-martin-tech' },
+};
+// Tout mot de passe accepté pour le mock
+const DEMO_PWD = null; // null = tout accepter
+
+// ── État global ───────────────────────────────────────────────
+const state = {
+  validated: new Set(),
+  rejected: new Set(),
+  network: 'ln',
+  sources: [],
+  user: null, // { name, initials, ln, is2017 }
+  accessToken: null,
+  refreshToken: null,
+  changeToken: null,
+  resetToken: null,
+  pendingEmail: null,
+  analysisDone: false,
+  network: 'ln'
+};
+
+let sourceIdSeq = 1;
+
+const FORCE_LABEL   = { verifiee:'Vérifiée', potentielle:'Potentielle', detaillee:'Détaillée', candidat:'Candidate' };
+const FORCE_WEIGHTS = { verifiee:100, potentielle:60, detaillee:35, candidat:15 };
+const RAISON_LABEL  = { fonction:'Fonction', enveloppe_de_mission:'Enveloppe de mission' };
+
+// ── Navigation ────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  updateStepNav(id);
+  // Cacher la CTA onboarding si on sort de cet écran
+  const obBar = document.getElementById('ob-continue-bar');
+  if (obBar) obBar.style.display = 'none';
+  // Memorise le dernier ecran hors auth pour reprendre a la reconnexion
+  const workflowScreens = ['screen-upload','screen-results','screen-portefeuille','screen-bs-manuel'];
+  if (workflowScreens.includes(id)) {
+    try { localStorage.setItem('bahyo_last_screen', id); } catch {}
+  }
+}
+
+function updateStepNav(screenId) {
+  const nav = document.querySelector('.nav-step');
+  if (screenId === 'screen-auth' || screenId === 'screen-onboarding') {
+    nav.style.display = 'none'; return;
+  }
+  nav.style.display = 'flex';
+  const s = [1,2,3].map(n => document.getElementById('step' + n));
+  s.forEach(x => { if (x) x.className = 'step'; });
+  if (screenId === 'screen-upload' || screenId === 'screen-bs-manuel')   s[0].classList.add('active');
+  if (screenId === 'screen-analyzing')     { s[0].classList.add('done'); s[1].classList.add('active'); }
+  if (screenId === 'screen-results')       { s[0].classList.add('done'); s[1].classList.add('active'); }
+  if (screenId === 'screen-portefeuille')  { s[0].classList.add('done'); s[1].classList.add('done'); s[2].classList.add('active'); }
+}
+
+function goToUpload() { showScreen('screen-upload'); }
+
+// ── Auth ──────────────────────────────────────────────────────
+function togglePwd(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁';
+}
+
+function authTab(tab) {
+  document.getElementById('form-login').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+}
+
+function afterLogin(data) {
+  state.accessToken  = data.accessToken;
+  state.refreshToken = data.refreshToken;
+  const u = data.user;
+  state.user = {
+    email:    u.email,
+    name:     u.display_name || u.email.split('@')[0],
+    initials: (u.display_name || u.email).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
+    ln:       u.ln_url || '',
+    is2017:   u.is_2017,
+    isSuperadmin: !!u.is_superadmin,
+  };
+  setUserNav(state.user);
+  // Recuperer les sources deja uploadees + portefeuille persiste, puis
+  // naviguer vers le dernier ecran utilise (localStorage) ou celui le plus
+  // avance atteint par l'utilisateur.
+  Promise.all([chargerSources(), chargerPortfolio()]).then(() => {
+    if (u.is_2017 && !state.analysisDone) {
+      loadOnboarding2017(state.user);
+      showScreen('screen-onboarding');
+      return;
+    }
+    // Charger les selections BS memorisees (validated / enPortefeuille / rejected)
+    loadSelections();
+
+    const bs = PORTEFEUILLE?.portfolio_brut?.retenus || [];
+
+    // Si on a des donnees, on pre-remplit le miroir des bioskills
+    if (bs.length) initResults();
+
+    // Determine l'ecran d'arrivee : priorite = Portefeuille si des BS y sont
+    // deja ajoutes ; sinon dernier ecran memorise ; sinon en fonction de l'avancement.
+    let dest = null;
+    if (state.enPortefeuille?.size > 0) {
+      dest = 'screen-portefeuille';
+    } else {
+      try { dest = localStorage.getItem('bahyo_last_screen'); } catch {}
+      const valid = ['screen-upload','screen-results','screen-portefeuille'];
+      if (!valid.includes(dest)) {
+        if (state.validated?.size > 0) dest = 'screen-results';
+        else if (state.analysisDone && bs.length) dest = 'screen-results';
+        else dest = 'screen-upload';
+      }
+    }
+    showScreen(dest);
+    if (dest === 'screen-portefeuille') renderPortefeuille();
+    updateInfoIndicator();
+  });
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pwd   = document.getElementById('login-pwd').value;
+  const err   = document.getElementById('login-error');
+
+  if (!email || !pwd) { err.classList.add('show'); err.textContent = 'Veuillez remplir tous les champs.'; return; }
+  err.classList.remove('show');
+
+  try {
+    const r    = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      err.classList.add('show');
+      if (data.code === 'EMAIL_NOT_VERIFIED') {
+        state.pendingEmail = email;
+        err.innerHTML = 'Email non vérifié. <a style="cursor:pointer" onclick="doResendVerification()">Renvoyer le lien d\'activation</a>.';
+      } else if (data.code === 'ACCOUNT_PENDING') {
+        err.style.cssText = 'background:#fef3c7;color:#92400e;border-color:#fcd34d';
+        err.textContent = '⏳ Votre compte est en attente d\'approbation par un administrateur. Vous recevrez un email dès validation.';
+      } else {
+        err.textContent = data.error || 'Email ou mot de passe incorrect.';
+      }
+      return;
+    }
+
+    if (data.must_resign_nda) {
+      const zone = document.getElementById('login-nda-zone');
+      const cb   = document.getElementById('login-nda-check');
+
+      // Premier passage : afficher la zone NDA + demander à cocher
+      if (zone.style.display === 'none' || !zone.style.display) {
+        state.pendingResignToken = data.change_token;
+        zone.style.display = '';
+        err.classList.add('show');
+        err.style.cssText = 'background:#fef3c7;color:#92400e;border-color:#fcd34d';
+        err.innerHTML = '⚠ Vous devez accepter l\'<a onclick="showNda()" style="cursor:pointer;color:#1d4ed8;text-decoration:underline">accord de confidentialité</a> pour continuer. Cochez la case ci-dessous, puis cliquez à nouveau sur Se connecter.';
+        return;
+      }
+
+      // Second passage : la case doit être cochée
+      if (!cb.checked) {
+        err.classList.add('show');
+        err.textContent = 'Cochez la case NDA pour continuer.';
+        return;
+      }
+
+      // Case cochée : on signe puis on relance le login (le mot de passe est déjà saisi)
+      try {
+        await fetch(`${API_BASE}/auth/resign-nda`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ change_token: state.pendingResignToken, nda_accepted: true }),
+        });
+        state.pendingResignToken = null;
+        zone.style.display = 'none';
+        cb.checked = false;
+        return doLogin();
+      } catch (e) {
+        err.classList.add('show');
+        err.textContent = 'Erreur signature NDA : ' + e.message;
+        return;
+      }
+    }
+
+    if (data.must_change_password) {
+      state.changeToken = data.change_token;
+      showScreen('screen-change-password');
+      return;
+    }
+
+    afterLogin(data);
+  } catch {
+    err.classList.add('show');
+    err.textContent = 'Erreur de connexion. Réessayez.';
+  }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pwd   = document.getElementById('reg-pwd').value;
+  const ln    = document.getElementById('reg-ln').value.trim();
+  const rgpd  = document.getElementById('rgpd-check').checked;
+  const nda   = document.getElementById('nda-check').checked;
+  const err   = document.getElementById('reg-error');
+
+  if (!name || !email || pwd.length < 8 || !rgpd || !nda) {
+    err.classList.add('show');
+    err.textContent = !nda
+      ? 'Vous devez accepter l\'accord de confidentialité Bahyo.'
+      : !rgpd
+        ? 'Vous devez accepter la politique de traitement des données.'
+        : 'Veuillez remplir tous les champs (mot de passe : 8 car. min).';
+    return;
+  }
+  err.classList.remove('show');
+
+  try {
+    const r    = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd, display_name: name, ln_url: ln || undefined, nda_accepted: true }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      err.classList.add('show');
+      err.textContent = data.error || 'Erreur lors de la création du compte.';
+      return;
+    }
+
+    // Succès : afficher l'écran "vérifiez votre email"
+    state.pendingEmail = email;
+    document.getElementById('sent-email').textContent = email;
+    document.getElementById('form-register').style.display  = 'none';
+    document.getElementById('form-email-sent').style.display = '';
+  } catch {
+    err.classList.add('show');
+    err.textContent = 'Erreur de connexion. Réessayez.';
+  }
+}
+
+async function doResendVerification() {
+  const email = state.pendingEmail || document.getElementById('login-email').value.trim();
+  if (!email) return;
+  try {
+    await fetch(`${API_BASE}/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const ok = document.getElementById('resend-ok');
+    if (ok) { ok.style.display = ''; setTimeout(() => { ok.style.display = 'none'; }, 4000); }
+    else showToast('Email de vérification renvoyé.');
+  } catch { showToast('Erreur réseau.'); }
+}
+
+// Affiche le texte de l'accord de confidentialite dans un modal (toggle FR/EN)
+// Le bouton "J'accepte" reste desactive tant que l'utilisateur n'a pas scrolle
+// jusqu'a la fin du texte -> preuve de lecture pour la valeur probante.
+async function showNda(lang = 'fr') {
+  let existing = document.querySelector('.nda-overlay');
+  if (existing) existing.remove();
+
+  let text = 'Chargement…';
+  try {
+    const r = await fetch(`${API_BASE}/auth/nda?lang=${lang}`);
+    if (r.ok) {
+      const d = await r.json();
+      text = d.text || text;
+    }
+  } catch { text = 'Erreur de chargement de l\'accord.'; }
+
+  const title = lang === 'en' ? 'Confidentiality Agreement — Bahyo' : 'Accord de confidentialité — Bahyo';
+  const closeBtn = lang === 'en' ? 'Close' : 'Fermer';
+  const acceptBtn = lang === 'en' ? '✓ I accept' : '✓ J\'accepte';
+  const scrollHint = lang === 'en'
+    ? 'Please scroll to the end of the text to enable acceptance.'
+    : 'Faites défiler jusqu\'à la fin du texte pour pouvoir accepter.';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'nda-overlay';
+  overlay.innerHTML = `
+    <div class="nda-modal">
+      <div class="nda-head">
+        <h3>${title}</h3>
+        <div class="nda-lang-toggle">
+          <button class="${lang==='fr'?'active':''}" onclick="showNda('fr')">FR</button>
+          <button class="${lang==='en'?'active':''}" onclick="showNda('en')">EN</button>
+        </div>
+        <button class="nda-close" onclick="this.closest('.nda-overlay').remove()" title="${closeBtn}">×</button>
+      </div>
+      <pre class="nda-body" id="nda-body-scroll">${text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</pre>
+      <div class="nda-scroll-hint" id="nda-scroll-hint">📜 ${scrollHint}</div>
+      <div class="nda-actions">
+        <button class="btn-secondary" onclick="this.closest('.nda-overlay').remove()">${closeBtn}</button>
+        <button class="btn-primary" id="nda-accept-btn" disabled onclick="onNdaAccept()">${acceptBtn}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Detection de scroll jusqu'a la fin (avec marge de 20px)
+  const body = document.getElementById('nda-body-scroll');
+  const hint = document.getElementById('nda-scroll-hint');
+  const btn  = document.getElementById('nda-accept-btn');
+  const checkScrollEnd = () => {
+    const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 20;
+    if (atEnd) {
+      btn.disabled = false;
+      state.ndaReadCompleted = true;
+      if (hint) hint.innerHTML = '✓ ' + (lang === 'en' ? 'You have read the agreement to the end.' : 'Vous avez pris connaissance de l\'accord dans son integralite.');
+      hint.classList.add('read');
+    }
+  };
+  body.addEventListener('scroll', checkScrollEnd);
+  // Si le texte tient sans scroll possible, on active tout de suite
+  setTimeout(() => {
+    if (body.scrollHeight <= body.clientHeight + 20) checkScrollEnd();
+  }, 100);
+}
+
+function onNdaAccept() {
+  document.getElementById('nda-check').checked = true;
+  // Coche aussi la case du login si presente
+  const loginCb = document.getElementById('login-nda-check');
+  if (loginCb) loginCb.checked = true;
+  document.querySelector('.nda-overlay')?.remove();
+}
+
+// Empeche de cocher la case NDA sans avoir lu le texte
+function preventNdaCheckBypass(e) {
+  if (!state.ndaReadCompleted) {
+    e.preventDefault();
+    showNda('fr'); // Ouvre le modal
+    showToast('Veuillez d\'abord lire l\'accord de confidentialité jusqu\'à la fin.', 4000);
+    return false;
+  }
+  return true;
+}
+
+function showForgot() {
+  // Pre-remplir avec l'email deja saisi si dispo
+  const loginEmail = document.getElementById('login-email').value.trim();
+  if (loginEmail) document.getElementById('forgot-email').value = loginEmail;
+  document.getElementById('forgot-error').classList.remove('show');
+  document.getElementById('forgot-ok').style.display = 'none';
+  showScreen('screen-forgot');
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+  const err   = document.getElementById('forgot-error');
+  const ok    = document.getElementById('forgot-ok');
+
+  err.classList.remove('show');
+  ok.style.display = 'none';
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    err.classList.add('show'); err.textContent = 'Email invalide.'; return;
+  }
+
+  try {
+    const r = await fetch(`${API_BASE}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    // Reponse toujours neutre cote serveur : on affiche toujours le meme message succes
+    if (r.ok) {
+      ok.style.display = '';
+    } else {
+      const data = await r.json().catch(() => ({}));
+      err.classList.add('show');
+      err.textContent = data.error || 'Erreur. Reessayez.';
+    }
+  } catch {
+    err.classList.add('show');
+    err.textContent = 'Erreur de connexion. Reessayez.';
+  }
+}
+
+async function doResetPassword() {
+  const pwd1 = document.getElementById('rst-pwd1').value;
+  const pwd2 = document.getElementById('rst-pwd2').value;
+  const err  = document.getElementById('rst-error');
+
+  if (pwd1.length < 8) { err.classList.add('show'); err.textContent = 'Minimum 8 caracteres.'; return; }
+  if (pwd1 !== pwd2)   { err.classList.add('show'); err.textContent = 'Les mots de passe ne correspondent pas.'; return; }
+  err.classList.remove('show');
+
+  try {
+    const r = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_token: state.resetToken, new_password: pwd1 }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) { err.classList.add('show'); err.textContent = data.error || 'Erreur.'; return; }
+
+    // Succes : retour au login avec message vert
+    state.resetToken = null;
+    showScreen('screen-auth');
+    const loginErr = document.getElementById('login-error');
+    loginErr.style.cssText = 'background:var(--green-lt);color:var(--green);border-color:#86efac';
+    loginErr.classList.add('show');
+    loginErr.textContent = '✓ Mot de passe reinitialise. Connectez-vous.';
+    history.replaceState({}, '', window.location.pathname);
+  } catch {
+    err.classList.add('show');
+    err.textContent = 'Erreur de connexion.';
+  }
+}
+
+async function doSetPassword() {
+  const pwd1 = document.getElementById('chg-pwd1').value;
+  const pwd2 = document.getElementById('chg-pwd2').value;
+  const err  = document.getElementById('chg-error');
+
+  if (pwd1.length < 8) { err.classList.add('show'); err.textContent = 'Minimum 8 caractères.'; return; }
+  if (pwd1 !== pwd2)   { err.classList.add('show'); err.textContent = 'Les mots de passe ne correspondent pas.'; return; }
+  err.classList.remove('show');
+
+  try {
+    const r    = await fetch(`${API_BASE}/auth/set-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ change_token: state.changeToken, new_password: pwd1 }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) { err.classList.add('show'); err.textContent = data.error || 'Erreur.'; return; }
+
+    showToast('Mot de passe défini. Bienvenue !');
+    afterLogin(data);
+  } catch {
+    err.classList.add('show');
+    err.textContent = 'Erreur de connexion.';
+  }
+}
+
+function setUserNav(user) {
+  document.querySelector('.avatar').textContent = user.initials || '?';
+  const em = document.getElementById('avatar-menu-email');
+  if (em) em.textContent = user.email || '';
+}
+
+function goHome() {
+  // Si connecte : retour a l'ecran principal, sinon retour a l'auth
+  const dest = state.accessToken
+    ? (state.user && state.user.is2017 ? 'screen-onboarding' : 'screen-upload')
+    : 'screen-auth';
+  showScreen(dest);
+  document.getElementById('avatar-menu').style.display = 'none';
+}
+
+function toggleAvatarMenu() {
+  const m = document.getElementById('avatar-menu');
+  if (!state.accessToken) return;  // pas de menu si non connecte
+  m.style.display = (m.style.display === 'none' || !m.style.display) ? 'block' : 'none';
+}
+
+// Fermer le menu au clic exterieur
+document.addEventListener('click', (e) => {
+  const w = document.querySelector('.avatar-wrap');
+  if (w && !w.contains(e.target)) {
+    document.getElementById('avatar-menu').style.display = 'none';
+  }
+});
+
+// ── Écran Mon compte ──────────────────────────────────────────
+function showCompte() {
+  document.getElementById('avatar-menu').style.display = 'none';
+  renderCompte();
+  showScreen('screen-compte');
+}
+
+async function renderCompte() {
+  const u = state.user || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || '—'; };
+  set('cpt-email', u.email);
+  set('cpt-name', u.name);
+  set('cpt-ln', u.ln || 'Non renseigné');
+  set('cpt-created', u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : 'Aujourd\'hui');
+
+  // Portefeuille functionnal state (from PORTEFEUILLE mock ou API)
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus || []);
+  const enPf = bs.filter(b => b.valide_par_user);
+  set('cpt-bs-count', enPf.length);
+
+  // Cote sommee
+  const forceCote = { verifiee: 100, potentielle: 60, detaillee: 35, candidat: 15 };
+  const totalCote = enPf.reduce((s, b) => {
+    let c = 0; if (b.aptitude) c++; if (b.acte) c++; if (b.tiers) c++;
+    return s + Math.round((forceCote[b.force] || 15) * (c / 3));
+  }, 0);
+  set('cpt-cote', enPf.length ? String(totalCote) : '—');
+  set('cpt-pf-statut', enPf.length ? 'Constitué' : 'Brouillon');
+  set('cpt-last-analyse', 'Non disponible');
+
+  // Wallet (mock — a brancher sur GET /wallet plus tard)
+  set('cpt-wallet', '0');
+  set('cpt-w-gagne', '0');
+  set('cpt-w-depense', '0');
+  set('cpt-w-alloc', enPf.length ? 'Éligible à la publication' : 'Non éligible (portefeuille non constitué)');
+
+  // Bloc Gestion : visible uniquement pour les superadmins
+  const adminBlock = document.getElementById('admin-block');
+  if (adminBlock) {
+    adminBlock.style.display = state.user?.isSuperadmin ? '' : 'none';
+    if (state.user?.isSuperadmin) {
+      loadAdminStats();
+      loadWhitelist();
+    }
+  }
+}
+
+// ── Gestion superadmin ────────────────────────────────────────
+async function apiAdmin(method, path, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${state.accessToken}`,
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${API_BASE}/admin${path}`, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
+}
+
+function switchAdminTab(tab, btn) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['wl','pending','users','nda'].forEach(t => {
+    const el = document.getElementById('admin-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'wl')      loadWhitelist();
+  if (tab === 'pending') loadPending();
+  if (tab === 'users')   loadUsers();
+  if (tab === 'nda')     loadNdaAdmin();
+}
+
+// ── Gestion tous les comptes ──────────────────────────────────
+async function loadUsers() {
+  try {
+    const statut = document.getElementById('users-filter').value;
+    const { users } = await apiAdmin('GET', `/users?statut=${statut}`);
+    const tbody = document.getElementById('users-tbody');
+    if (!users.length) {
+      tbody.innerHTML = `<tr class="pf-empty"><td colspan="6">Aucun compte.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = users.map(u => {
+      let statutLabel = '';
+      let statutCls = '';
+      if (u.closed_at)                        { statutLabel = '🚫 Fermé';      statutCls = 'low'; }
+      else if (u.suspended_at)                { statutLabel = '⏸ Suspendu';   statutCls = 'mid'; }
+      else if (!u.account_approved)           { statutLabel = '⏳ En attente'; statutCls = 'mid'; }
+      else if (u.is_superadmin)               { statutLabel = '🛡 Superadmin'; statutCls = 'high'; }
+      else                                    { statutLabel = '✓ Actif';       statutCls = 'high'; }
+
+      const ndaLabel = u.nda_signed_at
+        ? `<span title="${new Date(u.nda_signed_at).toLocaleString('fr-FR')} · v${u.nda_version || '?'}">✓</span>`
+        : (u.force_nda_resign ? '⚠ à re-signer' : '✗ non signé');
+
+      let actions = '';
+      if (!u.is_superadmin && !u.closed_at) {
+        if (u.suspended_at) {
+          actions += `<button class="btn btn-validate" onclick="userReactivate('${u.id}','${escapeHtml(u.email)}')" title="Réactiver">▶</button> `;
+        } else {
+          actions += `<button class="btn btn-reject" onclick="userSuspend('${u.id}','${escapeHtml(u.email)}')" title="Suspendre">⏸</button> `;
+        }
+        actions += `<button class="pf-remove" onclick="userClose('${u.id}','${escapeHtml(u.email)}')" title="Fermer le compte">🚫</button>`;
+      }
+
+      return `<tr>
+        <td><strong>${escapeHtml(u.email)}</strong></td>
+        <td>${escapeHtml(u.display_name || '—')}</td>
+        <td><span class="pf-eval ${statutCls}">${statutLabel}</span>${u.suspended_reason ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${escapeHtml(u.suspended_reason)}</div>` : ''}</td>
+        <td style="font-size:12px">${ndaLabel}</td>
+        <td style="font-size:11px;color:#94a3b8">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) { showToast('Users : ' + e.message); }
+}
+
+let REASONS_CACHE = null;
+async function loadReasons() {
+  if (REASONS_CACHE) return REASONS_CACHE;
+  try { REASONS_CACHE = await apiAdmin('GET', '/reasons'); } catch { REASONS_CACHE = { suspension: [], closure: [] }; }
+  return REASONS_CACHE;
+}
+
+// Modal de motif normalise (retourne { code, details } ou null si annule)
+async function promptReason(titre, action, reasons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'nda-overlay';
+    overlay.innerHTML = `
+      <div class="nda-modal" style="max-width:520px">
+        <div class="nda-head">
+          <h3>${titre}</h3>
+          <button class="nda-close" onclick="this.closest('.nda-overlay').remove();window.__reasonResolve(null)">×</button>
+        </div>
+        <div style="padding:20px">
+          <label class="bs-label">Motif</label>
+          <select class="bs-input" id="reason-code-sel">
+            <option value="">— Sélectionner un motif —</option>
+            ${reasons.map(r => `<option value="${r.code}">${r.label}</option>`).join('')}
+          </select>
+          <label class="bs-label" id="reason-details-lbl">Détails <span style="color:#94a3b8">(facultatif)</span></label>
+          <textarea class="bs-input bs-textarea" id="reason-details" rows="3" placeholder="Contexte, éléments factuels…"></textarea>
+        </div>
+        <div class="nda-actions">
+          <button class="btn-secondary" onclick="this.closest('.nda-overlay').remove();window.__reasonResolve(null)">Annuler</button>
+          <button class="btn-primary" id="reason-ok">${action}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const sel = document.getElementById('reason-code-sel');
+    const lbl = document.getElementById('reason-details-lbl');
+    sel.addEventListener('change', () => {
+      const isAutre = sel.value === 'AUTRE';
+      lbl.innerHTML = 'Détails ' + (isAutre
+        ? '<span style="color:#dc2626">(obligatoires, min 10 caractères)</span>'
+        : '<span style="color:#94a3b8">(facultatif)</span>');
+    });
+    window.__reasonResolve = resolve;
+    document.getElementById('reason-ok').onclick = () => {
+      const code = sel.value;
+      const details = document.getElementById('reason-details').value.trim();
+      if (!code) { alert('Choisissez un motif dans la liste.'); return; }
+      if (code === 'AUTRE' && details.length < 10) { alert('Précisez les détails (min 10 caractères).'); return; }
+      overlay.remove();
+      resolve({ code, details });
+    };
+  });
+}
+
+async function userSuspend(id, email) {
+  const { suspension } = await loadReasons();
+  const r = await promptReason(`Suspendre ${email}`, 'Suspendre', suspension);
+  if (!r) return;
+  try { await apiAdmin('POST', `/users/${id}/suspend`, { reason_code: r.code, reason_details: r.details }); showToast(`${email} suspendu`); loadUsers(); loadAdminStats(); }
+  catch (e) { showToast(e.message); }
+}
+async function userReactivate(id, email) {
+  if (!confirm(`Réactiver ${email} ?`)) return;
+  try { await apiAdmin('POST', `/users/${id}/reactivate`); showToast(`${email} réactivé`); loadUsers(); loadAdminStats(); }
+  catch (e) { showToast(e.message); }
+}
+async function userClose(id, email) {
+  const { closure } = await loadReasons();
+  const r = await promptReason(`Fermer définitivement ${email}`, 'Fermer le compte', closure);
+  if (!r) return;
+  if (!confirm(`Confirmer la fermeture du compte ${email} ? L'email sera libéré et pourra être réutilisé pour une nouvelle inscription.`)) return;
+  try { await apiAdmin('POST', `/users/${id}/close`, { reason_code: r.code, reason_details: r.details }); showToast(`${email} fermé — email libéré`); loadUsers(); loadAdminStats(); }
+  catch (e) { showToast(e.message); }
+}
+
+async function loadAdminStats() {
+  try {
+    const { stats } = await apiAdmin('GET', '/stats');
+    document.getElementById('admin-stats').innerHTML = `
+      <div class="admin-stat"><span>${stats.total_users}</span><label>Comptes</label></div>
+      <div class="admin-stat"><span>${stats.approuves}</span><label>Approuvés</label></div>
+      <div class="admin-stat"><span>${stats.en_attente}</span><label>En attente</label></div>
+      <div class="admin-stat"><span>${stats.non_verifies}</span><label>Non vérifiés</label></div>
+      <div class="admin-stat"><span>${stats.whitelist_count}</span><label>Whitelist</label></div>
+      <div class="admin-stat"><span>${stats.bs_valides}</span><label>BS validés</label></div>
+    `;
+  } catch (e) { showToast('Stats : ' + e.message); }
+}
+
+async function loadWhitelist() {
+  try {
+    const { whitelist } = await apiAdmin('GET', '/whitelist');
+    const tbody = document.getElementById('wl-tbody');
+    if (!whitelist.length) {
+      tbody.innerHTML = `<tr class="pf-empty"><td colspan="5">Liste blanche vide.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = whitelist.map(w => `<tr>
+      <td><strong>${escapeHtml(w.email)}</strong></td>
+      <td>${escapeHtml(w.motif || '—')}</td>
+      <td style="color:#94a3b8;font-size:12px">${escapeHtml(w.ajoute_par || '—')}</td>
+      <td style="color:#94a3b8;font-size:12px">${new Date(w.created_at).toLocaleDateString('fr-FR')}</td>
+      <td><button class="pf-remove" onclick="wlRemove('${w.id}','${escapeHtml(w.email)}')">×</button></td>
+    </tr>`).join('');
+  } catch (e) { showToast('Whitelist : ' + e.message); }
+}
+
+async function wlAdd() {
+  const email = document.getElementById('wl-email').value.trim();
+  const motif = document.getElementById('wl-motif').value.trim();
+  if (!email) { showToast('Email requis'); return; }
+  try {
+    await apiAdmin('POST', '/whitelist', { email, motif });
+    document.getElementById('wl-email').value = '';
+    document.getElementById('wl-motif').value = '';
+    showToast('Ajouté à la whitelist');
+    loadWhitelist(); loadAdminStats();
+  } catch (e) { showToast(e.message); }
+}
+
+async function wlRemove(id, email) {
+  if (!confirm(`Retirer ${email} de la whitelist ?`)) return;
+  try {
+    await apiAdmin('DELETE', `/whitelist/${id}`);
+    showToast('Retiré');
+    loadWhitelist(); loadAdminStats();
+  } catch (e) { showToast(e.message); }
+}
+
+async function loadPending() {
+  try {
+    const { pending } = await apiAdmin('GET', '/pending');
+    const tbody = document.getElementById('pending-tbody');
+    if (!pending.length) {
+      tbody.innerHTML = `<tr class="pf-empty"><td colspan="5">Aucun compte en attente.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = pending.map(u => `<tr>
+      <td><strong>${escapeHtml(u.email)}</strong></td>
+      <td>${escapeHtml(u.display_name || '—')}</td>
+      <td style="font-size:12px;color:#94a3b8">${new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
+      <td style="font-size:11px;color:#94a3b8">${escapeHtml(u.nda_ip || '—')}</td>
+      <td>
+        <button class="btn btn-validate" onclick="pendingApprove('${u.id}','${escapeHtml(u.email)}')">✓</button>
+        <button class="btn btn-reject" onclick="pendingReject('${u.id}','${escapeHtml(u.email)}')">✗</button>
+      </td>
+    </tr>`).join('');
+  } catch (e) { showToast('Pending : ' + e.message); }
+}
+
+async function pendingApprove(id, email) {
+  try { await apiAdmin('POST', `/approve/${id}`); showToast(`${email} approuvé`); loadPending(); loadAdminStats(); }
+  catch (e) { showToast(e.message); }
+}
+async function pendingReject(id, email) {
+  if (!confirm(`Rejeter et supprimer le compte ${email} ?`)) return;
+  try { await apiAdmin('DELETE', `/reject/${id}`); showToast(`${email} rejeté`); loadPending(); loadAdminStats(); }
+  catch (e) { showToast(e.message); }
+}
+
+let currentNdaLang = 'fr';
+
+async function loadNdaAdmin(lang = 'fr') {
+  currentNdaLang = lang;
+  // Bascule visuelle des boutons langue
+  const fr = document.getElementById('nda-lang-fr');
+  const en = document.getElementById('nda-lang-en');
+  if (fr) fr.classList.toggle('active', lang === 'fr');
+  if (en) en.classList.toggle('active', lang === 'en');
+  const pub = document.getElementById('nda-lang-pub');
+  if (pub) pub.textContent = lang.toUpperCase();
+
+  try {
+    const { nda } = await apiAdmin('GET', `/nda/current?lang=${lang}`);
+    if (nda) {
+      document.getElementById('nda-version').value = nda.version || '';
+      document.getElementById('nda-texte').value   = nda.texte   || '';
+    } else {
+      // Aucune version encore en base pour cette lang -> proposer le fallback
+      const r = await fetch(`${API_BASE}/auth/nda?lang=${lang}`); const d = await r.json();
+      document.getElementById('nda-version').value = d.version;
+      document.getElementById('nda-texte').value   = d.text;
+    }
+  } catch (e) { showToast('NDA : ' + e.message); }
+}
+
+async function publierNda() {
+  const version = document.getElementById('nda-version').value.trim();
+  const texte   = document.getElementById('nda-texte').value.trim();
+  const lang    = currentNdaLang;
+  if (!version || texte.length < 100) { showToast('Version + texte min 100 caractères.'); return; }
+  if (!confirm(`Publier la version "${version}" en ${lang.toUpperCase()} ? L'ancienne sera archivée.`)) return;
+  try { await apiAdmin('POST', '/nda', { version, texte, lang }); showToast(`NDA ${lang.toUpperCase()} publié`); }
+  catch (e) { showToast(e.message); }
+}
+
+function doForgotPasswordFromCompte() {
+  showScreen('screen-forgot');
+  const em = document.getElementById('forgot-email');
+  if (em && state.user?.email) em.value = state.user.email;
+}
+
+async function doLogout() {
+  try {
+    if (state.refreshToken) {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: state.refreshToken }),
+      });
+    }
+  } catch { /* silencieux */ }
+
+  // Reset complet du state
+  state.accessToken = null;
+  state.refreshToken = null;
+  state.changeToken = null;
+  state.resetToken = null;
+  state.user = null;
+  state.pendingEmail = null;
+  state.analysisDone = false;
+  state.sources = [];
+  state.validated = new Set();
+  state.rejected = new Set();
+  state.enPortefeuille = new Set();
+  try {
+    localStorage.removeItem('bahyo_last_screen');
+    // Ne pas supprimer bahyo_sel_<email> pour que l'user retrouve son etat a la
+    // prochaine connexion sur le meme device. Supprimer si suppression compte.
+  } catch {}
+
+  // Vider les champs sensibles
+  document.getElementById('login-pwd').value = '';
+  document.getElementById('avatar-menu').style.display = 'none';
+
+  // Retour ecran auth
+  showScreen('screen-auth');
+  const err = document.getElementById('login-error');
+  err.classList.remove('show');
+}
+
+// ── Onboarding 2017 ───────────────────────────────────────────
+function loadOnboarding2017(user) {
+  document.getElementById('ob-name').textContent    = user.name.split(' ')[0];
+  document.getElementById('ob-avatar').textContent  = user.initials;
+  document.getElementById('ob-ln-url').textContent  = user.ln;
+  document.getElementById('ob-consent-check').checked = false;
+  document.getElementById('btn-ob-ln').disabled = true;
+}
+
+function updateObCta() {
+  const checked = document.getElementById('ob-consent-check').checked;
+  document.getElementById('btn-ob-ln').disabled = !checked;
+}
+
+function openLinkedInExport() {
+  // Lien direct vers la page d'export de données LinkedIn
+  window.open('https://www.linkedin.com/mypreferences/d/categories/dara', '_blank');
+  // Afficher la CTA "J'ai mon fichier"
+  const bar = document.getElementById('ob-continue-bar');
+  bar.style.display = 'flex';
+  // Pré-remplir l'URL dans la page sources
+  const ln = state.user?.ln || '';
+  if (ln) document.getElementById('profile-url').value = ln.startsWith('http') ? ln : `https://${ln}`;
+}
+
+function goToUploadFromOnboarding() {
+  // Pré-remplir l'URL LinkedIn dans sources
+  const ln = state.user?.ln || '';
+  if (ln && !state.sources.some(s => s.isRef)) {
+    addSource({ name: `Profil LinkedIn — ${state.user.name}`, type: 'ln', size: null, isRef: true });
+  }
+  document.getElementById('ob-continue-bar').style.display = 'none';
+  showScreen('screen-upload');
+  checkAnalyzeReady();
+}
+
+// ── Upload — réseau social ────────────────────────────────────
+// ── Saisie BS manuelle ────────────────────────────────────────
+let bsmBlocSeq = 0;
+
+function openBsManuel() {
+  // Reset formulaire
+  document.getElementById('bsm-aptitude').value = '';
+  document.getElementById('bsm-acte').value = '';
+  document.getElementById('bsm-force').value = 'candidat';
+  document.getElementById('bsm-tiers').value = '';
+  document.getElementById('bsm-extrait').value = '';
+  document.getElementById('bsm-rang').value = 'PRIMAIRE';
+  document.getElementById('bsm-note').value = '';
+  document.getElementById('bsm-blocs-etendus').innerHTML = '';
+  document.getElementById('bsm-error').style.display = 'none';
+  bsmBlocSeq = 0;
+  showScreen('screen-bs-manuel');
+}
+
+function bsmAddBloc() {
+  const id = bsmBlocSeq++;
+  const container = document.getElementById('bsm-blocs-etendus');
+  const div = document.createElement('div');
+  div.className = 'bsm-bloc-item';
+  div.id = `bsm-bloc-${id}`;
+  div.innerHTML = `
+    <button type="button" class="btn-remove-bloc" onclick="bsmRemoveBloc(${id})" title="Retirer">×</button>
+
+    <label class="bs-label">Type d'illustration</label>
+    <select class="bs-input" data-field="type">
+      <option value="PROJET">📁 Projet — description d'une réalisation</option>
+      <option value="TEMOIGNAGE">💬 Témoignage — retour d'un pair, d'un client</option>
+      <option value="RECOMMANDATION">✍️ Recommandation — écrit d'un tiers</option>
+      <option value="PUBLICATION">📄 Publication — article, communication</option>
+      <option value="LIVRABLE">📦 Livrable — produit, code, artefact</option>
+      <option value="CERTIFICAT">🏅 Certificat — diplôme, attestation</option>
+      <option value="AUTRE">Autre</option>
+    </select>
+
+    <label class="bs-label">Titre public (visible sur la Bourse)</label>
+    <input class="bs-input" type="text" placeholder="Ex : Projet PKI DGA — 2018-2019" data-field="titre_public" maxlength="120">
+
+    <label class="bs-label">Description publique (facultatif)</label>
+    <textarea class="bs-input bs-textarea" rows="2" placeholder="Contexte, portée, résultat — reste public" data-field="description_publique"></textarea>
+
+    <label class="bs-label">Contenu détaillé (facultatif)</label>
+    <textarea class="bs-input bs-textarea" rows="3" placeholder="Le récit complet, l'extrait du témoignage, le texte de la recommandation…" data-field="contenu_detail"></textarea>
+
+    <label class="bs-label">Prix indicatif (€, facultatif)</label>
+    <input class="bs-input" type="number" min="0" step="1" placeholder="0" data-field="prix_indicatif_eur">
+
+    <div class="bsm-chiffre-toggle">
+      <input type="checkbox" data-field="chiffre" id="bsm-chiffre-${id}">
+      <label for="bsm-chiffre-${id}">🔒 Contenu détaillé privé chiffré (seul le titre et la description publique sont visibles — Étage 2 gère l'achat pour révéler le reste)</label>
+    </div>
+  `;
+  container.appendChild(div);
+}
+
+function bsmRemoveBloc(id) {
+  const el = document.getElementById(`bsm-bloc-${id}`);
+  if (el) el.remove();
+}
+
+async function doSaveBsManuel() {
+  const err = document.getElementById('bsm-error');
+  err.style.display = 'none';
+
+  const aptitude = document.getElementById('bsm-aptitude').value.trim();
+  if (aptitude.length < 3) {
+    err.textContent = 'L\'aptitude est obligatoire (min 3 caracteres).';
+    err.style.display = ''; return;
+  }
+
+  const payload = {
+    aptitude,
+    acte:             document.getElementById('bsm-acte').value.trim() || null,
+    force:            document.getElementById('bsm-force').value,
+    tiers:            document.getElementById('bsm-tiers').value.trim() || null,
+    extrait:          document.getElementById('bsm-extrait').value.trim() || null,
+    rang:             document.getElementById('bsm-rang').value,
+    note_utilisateur: document.getElementById('bsm-note').value.trim() || null,
+    blocs_etendus: [],
+  };
+
+  // Collecter les blocs etendus
+  document.querySelectorAll('.bsm-bloc-item').forEach(item => {
+    const get = f => item.querySelector(`[data-field="${f}"]`)?.value?.trim() || null;
+    const titre = get('titre_public');
+    if (!titre) return;
+    const chiffre = item.querySelector('[data-field="chiffre"]')?.checked;
+    payload.blocs_etendus.push({
+      titre_public: titre,
+      description_publique: get('description_publique'),
+      type: get('type') || 'AUTRE',
+      prix_indicatif_eur: parseFloat(get('prix_indicatif_eur')) || null,
+      // Chiffrement reel a implementer cote client (Etage 2). Pour l'instant on garde le flag.
+      contenu_chiffre: null,
+      iv_chiffrement: null,
+      hash_contenu: chiffre ? 'PENDING_ENCRYPTION' : null,
+    });
+  });
+
+  // Mode édition : mise à jour d'un BS existant (front-only pour l'instant)
+  if (state.editingBsId) {
+    const bs = (PORTEFEUILLE?.portfolio_brut?.retenus || []).find(b => String(b.id) === String(state.editingBsId));
+    if (bs) {
+      Object.assign(bs, {
+        aptitude:         payload.aptitude,
+        acte:             payload.acte,
+        force:            payload.force,
+        tiers:            payload.tiers,
+        extrait:          payload.extrait,
+        rang:             payload.rang,
+        note_utilisateur: payload.note_utilisateur,
+      });
+      showToast(`BS "${payload.aptitude}" mis à jour.`);
+      state.editingBsId = null;
+      initResults();
+      renderPortefeuille();
+      showScreen('screen-portefeuille');
+      // TODO: PUT /portfolio/bioskills/:id ...
+      return;
+    }
+  }
+
+  try {
+    const r = await fetch(`${API_BASE}/portfolio/bs/manuel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.accessToken}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Echec enregistrement');
+
+    showToast(`BS "${aptitude}" enregistre.`);
+    showScreen('screen-results');
+    // TODO: recharger les BS depuis /portfolio/me pour actualiser le miroir
+  } catch (e) {
+    err.textContent = `Erreur : ${e.message}`;
+    err.style.display = '';
+  }
+}
+
+// Navigation via le bandeau d'etapes (retour possible vers Sources depuis n'importe ou)
+function navToStep(target) {
+  if (!state.accessToken) return; // ignore si pas connecte
+  // Sources : toujours accessible
+  if (target === 'screen-upload') { showScreen(target); return; }
+  // Analyse : seulement si des sources existent
+  if (target === 'screen-analyzing') {
+    if (!state.sources.length) { showToast('Ajoutez d\'abord une source.'); return; }
+    showScreen(target);
+    return;
+  }
+  // Bioskills : accessible si une analyse a deja ete lancee OU si un portefeuille existe
+  if (target === 'screen-results') {
+    const bsList = document.getElementById('bs-list');
+    const hasBs  = bsList && bsList.children.length > 0;
+    const hasMock = (PORTEFEUILLE?.portfolio_brut?.retenus || []).length > 0;
+    if (!state.analysisDone && !hasBs && !hasMock) {
+      showToast('Lancez d\'abord une analyse.'); return;
+    }
+    // Assure que la table est peuplee au moment de l'affichage
+    if (!hasBs && hasMock) initResults();
+    showScreen(target);
+    return;
+  }
+  // Portefeuille : rafraichit la table a chaque navigation
+  if (target === 'screen-portefeuille') { showScreen(target); renderPortefeuille(); return; }
+}
+
+// Assistant flottant : ouvrir/fermer + changer d'onglet
+function toggleAssistant() {
+  const f = document.getElementById('assistant-float');
+  const isOpen = f.style.display !== 'none';
+  f.style.display = isOpen ? 'none' : 'flex';
+  document.getElementById('fab-icon').textContent = isOpen ? '◈' : '×';
+}
+function switchAssistantTab(tab, btn) {
+  document.querySelectorAll('.assistant-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('tab-help').style.display = tab === 'help' ? 'flex' : 'none';
+}
+
+// Clic sur la chip LN ou IG : ouvre la page d'export du reseau
+// et selectionne le mode (pour le placeholder et la qualification).
+function chipReseau(net, el) {
+  state.network = net;
+  document.querySelectorAll('.social-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const urlInput = document.getElementById('profile-url');
+  urlInput.placeholder = net === 'ln'
+    ? 'https://www.linkedin.com/in/votre-profil'
+    : 'https://www.instagram.com/votre_compte';
+  const btn = document.getElementById('btn-import-url');
+  btn.className = 'btn-import' + (net === 'ig' ? ' ig' : '');
+
+  const exportUrl = net === 'ln'
+    ? 'https://www.linkedin.com/mypreferences/d/download-my-data'
+    : 'https://accountscenter.instagram.com/info_and_permissions/dyi/';
+  window.open(exportUrl, '_blank', 'noopener,noreferrer');
+}
+
+// Bouton "Importer" a double usage :
+//  - Champ URL vide    → ouvre le selecteur de fichier
+//  - Champ URL rempli  → importe l'URL comme aujourd'hui
+function importSmart() {
+  const url = document.getElementById('profile-url').value.trim();
+  if (url) {
+    importUrl();
+  } else {
+    document.getElementById('profile-file-picker').click();
+  }
+}
+
+// Met a jour le libelle du bouton selon le contenu du champ URL
+function majBoutonImporter() {
+  const btn = document.getElementById('btn-import-url');
+  const hasUrl = document.getElementById('profile-url').value.trim().length > 5;
+  if (hasUrl) {
+    btn.innerHTML = '↗ Importer';
+    btn.classList.remove('btn-import-file');
+  } else {
+    btn.innerHTML = '📎 Choisir un fichier';
+    btn.classList.add('btn-import-file');
+  }
+}
+
+// Fichier ZIP/PDF choisi depuis le selecteur → upload en mode reference
+function onProfileFileChosen(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  uploadFile(file, /*isRef=*/true);
+  e.target.value = '';
+}
+
+async function importUrl() {
+  const url = document.getElementById('profile-url').value.trim();
+  if (!url) { showToast('Collez d\'abord une URL.'); return; }
+  if (!/^https?:\/\//i.test(url)) { showToast('URL invalide (doit commencer par http:// ou https://).'); return; }
+
+  const reseau = state.network || 'ln';
+  const nomAffiche = reseau === 'ln' ? 'Profil LinkedIn' : 'Profil Instagram';
+
+  // Anti-doublon URL (meme URL deja importee)
+  const doublon = state.sources.find(s => s.name === url);
+  if (doublon) { showToast('Cette URL est deja importee.'); return; }
+
+  // Ligne optimiste
+  const tempId = 'tmp-' + (sourceIdSeq++);
+  state.sources.push({
+    id: tempId, name: url, size: url.length,
+    type: reseau, isRef: true, status: 'uploading', sessionNew: true, progress: 50,
+  });
+  renderSourceLists();
+
+  try {
+    const r = await fetch(`${API_BASE}/sources/url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.accessToken}` },
+      body: JSON.stringify({ url, reseau }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Echec import URL');
+
+    const idx = state.sources.findIndex(s => s.id === tempId);
+    if (idx !== -1) {
+      state.sources[idx] = {
+        id:     data.source.id,
+        name:   data.source.nom_fichier,
+        size:   data.source.taille_octets,
+        type:   normaliseSrcType(data.source.type),
+        isRef:  data.source.est_reference,
+        status: 'ok',
+        sessionNew: true,
+      };
+    }
+    document.getElementById('profile-url').value = '';
+    showToast(`${nomAffiche} enregistre comme fil directeur.`);
+  } catch (err) {
+    state.sources = state.sources.filter(s => s.id !== tempId);
+    showToast(`Erreur : ${err.message}`, 5000);
+  }
+  renderSourceLists();
+  checkAnalyzeReady();
+}
+
+// ── Upload — fichiers ─────────────────────────────────────────
+function onDragOver(e, id) { e.preventDefault(); document.getElementById(id).classList.add('drag-over'); }
+function onDragLeave(id) { document.getElementById(id).classList.remove('drag-over'); }
+function onDrop(e, type) {
+  e.preventDefault();
+  const id = type === 'reference' ? 'drop-profile' : 'drop-private';
+  document.getElementById(id).classList.remove('drag-over');
+  [...e.dataTransfer.files].forEach(f => uploadFile(f, type === 'reference'));
+}
+function onFileInput(e, type) {
+  [...e.target.files].forEach(f => uploadFile(f, type === 'reference'));
+  e.target.value = '';
+}
+
+function guessType(name, zone) {
+  if (zone === 'reference') return 'ln';
+  const lc = name.toLowerCase();
+  if (lc.includes('cv') || lc.includes('resume')) return 'cv';
+  return 'libre';
+}
+
+// Upload reel vers le serveur (POST /sources/upload)
+async function uploadFile(file, isRef) {
+  // Anti-doublon exact : meme nom + meme taille = fichier deja depose (identique)
+  const doublonExact = state.sources.find(s => s.name === file.name && s.size === file.size);
+  if (doublonExact) {
+    showToast(`« ${file.name} » a deja ete deposé (fichier identique).`, 4000);
+    return;
+  }
+  // NB : les fichiers de meme nom mais tailles differentes seront suffixes par le serveur
+
+  // Ajout optimiste dans la liste avec statut "uploading"
+  const tempId = 'tmp-' + (sourceIdSeq++);
+  const optimistic = {
+    id: tempId, name: file.name, size: file.size, isRef,
+    type: guessType(file.name, isRef ? 'reference' : 'private'),
+    status: 'uploading', tempId: true, sessionNew: true,
+  };
+  state.sources.push(optimistic);
+  renderSourceLists();
+
+  try {
+    const form = new FormData();
+    form.append('fichier', file);
+    // Qualification cote client : zone de depot (reference/prive) et reseau
+    form.append('est_reference', isRef ? 'true' : 'false');
+    if (isRef && state.network) form.append('reseau', state.network);
+
+    // XHR pour beneficier des events de progression
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/sources/upload`);
+      xhr.setRequestHeader('Authorization', `Bearer ${state.accessToken}`);
+      xhr.upload.addEventListener('progress', (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          const s = state.sources.find(x => x.id === tempId);
+          if (s) { s.progress = pct; renderSourceLists(); }
+        }
+      });
+      xhr.addEventListener('load', () => {
+        try {
+          const body = JSON.parse(xhr.responseText || '{}');
+          if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+          else reject(new Error(body.error || `HTTP ${xhr.status}`));
+        } catch { reject(new Error('Reponse serveur invalide')); }
+      });
+      xhr.addEventListener('error', () => reject(new Error('Erreur reseau')));
+      xhr.send(form);
+    });
+
+    // Remplace la ligne optimiste par les vraies donnees serveur
+    const idx = state.sources.findIndex(s => s.id === tempId);
+    if (idx !== -1) {
+      state.sources[idx] = {
+        id:     data.source.id,
+        name:   data.source.nom_fichier,
+        size:   data.source.taille_octets,
+        type:   normaliseSrcType(data.source.type),
+        isRef:  data.source.est_reference,
+        status: 'ok',
+        sessionNew: true,   // reste "nouveau" pour cette session
+      };
+    }
+    // Notifie l'user si le nom a ete suffixe pour eviter le doublon
+    if (data.suffixe_applique) {
+      showToast(`« ${data.nom_original} » existait deja — renomme en « ${data.source.nom_fichier} »`, 5000);
+    }
+  } catch (err) {
+    // En cas d'erreur : retire la ligne optimiste et alerte
+    state.sources = state.sources.filter(s => s.id !== tempId);
+    showToast(`Erreur : ${err.message}`, 5000);
+  }
+  renderSourceLists();
+  checkAnalyzeReady();
+}
+
+function normaliseSrcType(serverType) {
+  const t = (serverType || '').toUpperCase();
+  if (t.includes('LINKEDIN')) return 'ln';
+  if (t.includes('INSTAGRAM')) return 'ig';
+  if (t.startsWith('CV')) return 'cv';
+  return 'libre';
+}
+
+function addSource(s) {
+  // Utilise pour les entrees virtuelles (profil LN par URL)
+  const src = { id: sourceIdSeq++, ...s, status: 'ok', virtual: true };
+  state.sources.push(src);
+  renderSourceLists();
+  checkAnalyzeReady();
+}
+
+async function removeSource(id) {
+  const src = state.sources.find(s => s.id === id);
+  state.sources = state.sources.filter(s => s.id !== id);
+  renderSourceLists();
+  checkAnalyzeReady();
+  // Si c'est une vraie source serveur (uuid, pas tmp- ni virtual), on supprime en base
+  if (src && !src.virtual && !String(id).startsWith('tmp-')) {
+    try {
+      await fetch(`${API_BASE}/sources/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${state.accessToken}` },
+      });
+    } catch { /* silencieux */ }
+  }
+}
+
+// Charge le portefeuille persiste a la connexion (BS deja extraits + provenance)
+async function chargerPortfolio() {
+  if (!state.accessToken) return;
+  try {
+    const r = await fetch(`${API_BASE}/portfolio/me`, {
+      headers: { 'Authorization': `Bearer ${state.accessToken}` },
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+
+    // Si des BS existent en base, on marque l'analyse comme faite
+    if (data.bioskills && data.bioskills.length) {
+      state.analysisDone = true;
+      state.portfolio = data;
+
+      // Precharger le miroir avec les vraies donnees (converti au format attendu)
+      const pb = {
+        retenus: data.bioskills.map(bs => ({
+          id: bs.id, aptitude: bs.aptitude, acte: bs.acte,
+          force: bs.force, tiers: bs.tiers, extrait: bs.extrait,
+          source_nom: bs.source_nom || null, // pour l'origine
+        })),
+        ecartes: (data.ecartes || []).map(e => ({
+          id: e.id, aptitude: e.aptitude, acte: e.acte,
+          raison: e.raison, extrait: e.extrait,
+        })),
+        n_candidats: (data.bioskills.length + (data.ecartes || []).length),
+        source_resume: data.portfolio?.source_resume || 'Extraction sauvegardée',
+      };
+      // On remplace la constante mock au vol pour cet utilisateur
+      PORTEFEUILLE = { portfolio_brut: pb };
+
+      // Date derniere extraction dans la sidebar
+      const dt = data.portfolio?.extraction_at;
+      if (dt) {
+        const d = new Date(dt);
+        const s = document.getElementById('portfolio-last-extraction');
+        if (s) s.textContent = `Dernière analyse : ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})}`;
+      }
+    }
+  } catch { /* silencieux */ }
+}
+
+// Relance l'analyse (POST /portfolio/analyze) sans avoir a re-uploader
+async function relancerAnalyse() {
+  if (!confirm('Relancer une analyse complète ? Les BS déjà validés par vos soins sont préservés, les autres seront remplacés par le nouveau résultat.')) return;
+
+  const btn = document.getElementById('btn-relancer-analyse');
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 Analyse en cours…'; }
+
+  try {
+    // Recupere les IDs de toutes les sources persistees
+    const sourceIds = state.sources.filter(s => !String(s.id).startsWith('tmp-') && !s.virtual).map(s => s.id);
+    if (!sourceIds.length) {
+      showToast('Aucune source à analyser. Ajoutez-en dans l\'écran Sources.');
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Relancer l\'analyse'; }
+      return;
+    }
+    const r = await fetch(`${API_BASE}/portfolio/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.accessToken}` },
+      body: JSON.stringify({ source_ids: sourceIds }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Echec analyse');
+
+    showToast('Analyse relancée. Rechargement des BS…');
+    await chargerPortfolio();
+    initResults();
+  } catch (e) {
+    showToast(`Erreur : ${e.message}`, 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Relancer l\'analyse'; }
+  }
+}
+
+// Charge les sources persistees a la connexion
+async function chargerSources() {
+  if (!state.accessToken) return;
+  try {
+    const r = await fetch(`${API_BASE}/sources`, {
+      headers: { 'Authorization': `Bearer ${state.accessToken}` },
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    state.sources = (data.sources || []).map(s => ({
+      id:     s.id,
+      name:   s.nom_fichier,
+      size:   s.taille_octets,
+      type:   normaliseSrcType(s.type),
+      isRef:  s.est_reference,
+      status: 'ok',
+    }));
+    renderSourceLists();
+    checkAnalyzeReady();
+  } catch { /* silencieux */ }
+}
+
+function renderSourceLists() {
+  const refs = state.sources.filter(s => s.isRef);
+  const privs = state.sources.filter(s => !s.isRef);
+  renderList('source-list-reference', refs);
+  renderList('source-list-private', privs);
+}
+
+function renderList(containerId, sources) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  // Tri : uploads en cours en haut, puis nouveaux (session), puis persistes
+  const sorted = [...sources].sort((a, b) => {
+    const rank = s => (s.status === 'uploading' ? 0 : (s.sessionNew ? 1 : 2));
+    return rank(a) - rank(b);
+  });
+
+  let lastRank = -1;
+  sorted.forEach(s => {
+    const uploading = s.status === 'uploading';
+    const rank = uploading ? 0 : (s.sessionNew ? 1 : 2);
+
+    // Separateur entre les groupes
+    if (rank !== lastRank) {
+      const label = rank === 0 ? 'En cours…' : rank === 1 ? 'Nouveaux (cette session)' : 'Déjà en base';
+      const sep = document.createElement('div');
+      sep.className = 'source-group-sep';
+      sep.textContent = label;
+      el.appendChild(sep);
+      lastRank = rank;
+    }
+
+    const item = document.createElement('div');
+    const pct = uploading ? (s.progress || 0) : 100;
+    item.className = 'source-item' + (s.isRef ? ' reference' : '') + (uploading ? ' uploading' : '') + (s.sessionNew && !uploading ? ' session-new' : '');
+    const idAttr = String(s.id).replace(/'/g, "\\'");
+    item.innerHTML = `
+      <span class="source-type-badge ${s.type}">${badgeLabel(s.type, s.isRef)}</span>
+      <span class="source-name">${escapeHtml(s.name)}</span>
+      ${s.size ? `<span class="source-size">${formatSize(s.size)}</span>` : ''}
+      ${uploading
+        ? `<span class="upload-progress-wrap"><span class="upload-progress-bar" style="width:${pct}%"></span></span>
+           <span class="source-status uploading">${pct}%</span>`
+        : `<span class="source-status ok">✓</span>`}
+      <button class="btn-remove" onclick="removeSource('${idAttr}')" ${uploading ? 'disabled' : ''}>×</button>`;
+    el.appendChild(item);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function badgeLabel(type, isRef) {
+  if (isRef) return type === 'ln' ? 'LinkedIn' : type === 'ig' ? 'Instagram' : 'Référence';
+  if (type === 'cv') return 'CV';
+  return 'Fichier';
+}
+function formatSize(b) { return b < 1024*1024 ? `${Math.round(b/1024)} Ko` : `${(b/1024/1024).toFixed(1)} Mo`; }
+
+function checkAnalyzeReady() {
+  const hasRef = state.sources.some(s => s.isRef)
+    || document.getElementById('profile-url').value.trim().length > 5;
+  // Bouton toujours cliquable : le message d'aide s'affiche au clic si pas de reference
+  document.getElementById('upload-info').innerHTML = hasRef
+    ? `<strong>${state.sources.length} source(s)</strong> prête(s) · ${state.sources.filter(s=>!s.isRef).length} fichier(s) privé(s)`
+    : `<strong>${state.sources.length}</strong> fichier(s) prive(s) ajoute(s) · <span style="color:#d97706">ajoutez un profil public (LinkedIn/Instagram) pour ancrer l'analyse</span>`;
+}
+
+// ── Analyse ───────────────────────────────────────────────────
+function startAnalysis() {
+  // Si URL non encore importée, l'importer maintenant
+  const url = document.getElementById('profile-url').value.trim();
+  if (url && !state.sources.some(s => s.isRef)) importUrl();
+
+  // Verifier qu'il y a bien au moins une source de reference (profil public)
+  const hasRef = state.sources.some(s => s.isRef);
+  if (!hasRef) {
+    showToast('Ajoutez au moins un profil public (LinkedIn ou Instagram) pour ancrer l\'analyse.', 5000);
+    // Faire clignoter le champ URL pour attirer l'attention
+    const urlInput = document.getElementById('profile-url');
+    urlInput.style.transition = 'box-shadow .3s';
+    urlInput.style.boxShadow = '0 0 0 3px rgba(217,119,6,.3)';
+    urlInput.focus();
+    setTimeout(() => { urlInput.style.boxShadow = ''; }, 1500);
+    return;
+  }
+
+  showScreen('screen-analyzing');
+  // Simulation des 3 étapes
+  const steps = ['astep1','astep2','astep3'];
+  let i = 0;
+  steps.forEach(id => document.getElementById(id).className = 'analyzing-step');
+  const next = () => {
+    if (i < steps.length) {
+      if (i > 0) document.getElementById(steps[i-1]).className = 'analyzing-step done';
+      document.getElementById(steps[i]).className = 'analyzing-step current';
+      i++;
+      setTimeout(next, 900);
+    } else {
+      document.getElementById(steps[steps.length-1]).className = 'analyzing-step done';
+      setTimeout(showResults, 500);
+    }
+  };
+  next();
+  // En prod : fetch('/portfolio/analyze', { texte, source_ids })
+}
+
+function showResults() {
+  initResults();
+  state.analysisDone = true;
+  showScreen('screen-results');
+}
+
+// ── Résultats ─────────────────────────────────────────────────
+function initResults() {
+  const pb = PORTEFEUILLE.portfolio_brut;
+
+  // Bande sources
+  renderSourcesBar();
+  renderSourcesSidebar();
+
+  // Miroir
+  document.getElementById('source-resume').textContent = pb.source_resume;
+  renderStats(pb);
+
+  // BS
+  document.getElementById('retenus-count').textContent =
+    `${pb.retenus.length} extraits sur ${pb.n_candidats} candidats`;
+  renderRetenus(pb.retenus);
+
+  // Écartés
+  document.getElementById('ecartes-count').textContent = pb.ecartes.length;
+  renderEcartes(pb.ecartes);
+
+  // Sidebar score + évaluateur 3A
+  renderForceBars(pb.retenus);
+  updateScore();
+  updateCTA();
+  updateEvaluateur3A();
+  updateInfoIndicator();
+  renderPortefeuille();
+}
+
+function renderSourcesBar() {
+  const chips = document.getElementById('sources-bar-chips');
+  chips.innerHTML = '';
+  if (!state.sources.length) {
+    chips.innerHTML = '<span style="font-size:12px;color:#9ca3af">Sources simulées (mock)</span>';
+    return;
+  }
+  state.sources.forEach(s => {
+    const pill = document.createElement('span');
+    pill.className = 'source-pill';
+    const dotClass = s.isRef ? (s.type === 'ln' ? 'ln' : 'ig') : (s.type === 'cv' ? 'cv' : 'libre');
+    pill.innerHTML = `<span class="dot ${dotClass}"></span>${s.name}`;
+    chips.appendChild(pill);
+  });
+}
+
+function renderSourcesSidebar() {
+  const list = document.getElementById('sources-sidebar-list');
+  list.innerHTML = '';
+  const display = state.sources.length ? state.sources : [
+    { name: 'Profil LinkedIn (simulation)', type: 'ln', isRef: true, size: null, status: 'ok' },
+    { name: 'CV_ingenieur_senior.pdf', type: 'cv', isRef: false, size: 245000, status: 'ok' }
+  ];
+  display.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'sources-sidebar-item';
+    item.innerHTML = `
+      <span class="source-type-badge ${s.type}">${badgeLabel(s.type, s.isRef)}</span>
+      <span class="source-name" style="font-size:12px">${s.name}</span>
+      <span class="source-status ok" style="font-size:11px">✓</span>`;
+    list.appendChild(item);
+  });
+}
+
+function renderStats(pb) {
+  const counts = { verifiee:0, potentielle:0, detaillee:0, candidat:0 };
+  pb.retenus.forEach(bs => counts[bs.force]++);
+  const row = document.getElementById('stats-row');
+  row.innerHTML = '';
+  Object.entries(counts).forEach(([f, n]) => {
+    if (!n) return;
+    const c = document.createElement('div');
+    c.className = `stat-chip ${f}`;
+    c.textContent = `${n} ${FORCE_LABEL[f]}`;
+    row.appendChild(c);
+  });
+  const ec = document.createElement('div');
+  ec.className = 'stat-chip ecartes';
+  ec.textContent = `${pb.ecartes.length} écarté${pb.ecartes.length>1?'s':''}`;
+  row.appendChild(ec);
+}
+
+function renderRetenus(retenus) {
+  const list = document.getElementById('bs-list');
+  list.innerHTML = '';
+  retenus.forEach(bs => {
+    // Skip les BS ecartes (cache immediate)
+    if (state.rejected?.has(bs.id)) return;
+
+    const card = document.createElement('div');
+    card.className = 'bs-card';
+    // Refleter validated / enPortefeuille depuis le state
+    if (state.validated?.has(bs.id)) card.classList.add('validated');
+    card.id = `card-${bs.id}`;
+    // Origine : soit source_nom (fichier), soit "Saisie manuelle" si ref_locale commence par MAN-
+    const origine = String(bs.ref_locale || '').startsWith('MAN-')
+      ? '✍️ Saisie manuelle'
+      : (bs.source_nom ? `📄 ${bs.source_nom}` : null);
+
+    card.innerHTML = `
+      <div class="bs-top">
+        <div class="bs-aptitude">${bs.aptitude}</div>
+        <span class="force-badge ${bs.force}">${FORCE_LABEL[bs.force]}</span>
+      </div>
+      <div class="bs-meta">
+        ${bs.acte ? `<span class="meta-tag"><span class="label">Acte :</span> ${bs.acte}</span>` : ''}
+        ${bs.tiers ? `<span class="tiers-tag">${bs.tiers}</span>` : ''}
+      </div>
+      ${bs.extrait ? `<div class="extrait">« ${bs.extrait} »</div>` : ''}
+      ${origine ? `<div class="bs-origine">${origine}</div>` : ''}
+      <div class="bs-actions">
+        <button class="btn btn-validate ${state.validated?.has(bs.id) ? 'active' : ''}" id="v-${bs.id}" onclick="toggle('${bs.id}','validate')" title="Le BS respecte bien la règle des 3A (Aptitude · Acte · Attestation)">${state.validated?.has(bs.id) ? '✓ Validé' : '✓ Valider'}</button>
+        <button class="btn btn-pf ${state.enPortefeuille?.has(bs.id) ? 'active' : ''}" id="p-${bs.id}" onclick="addToPf('${bs.id}')" title="Ajouter ce BS à mon portefeuille (à coter)" style="display:${state.validated?.has(bs.id) ? '' : 'none'}">${state.enPortefeuille?.has(bs.id) ? '✓ Au portefeuille' : '➕ Au portefeuille'}</button>
+        <button class="btn btn-reject" id="r-${bs.id}" onclick="toggle('${bs.id}','reject')" title="Ce BS n'est pas pertinent — le retirer de la liste">✗ Écarter</button>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function renderEcartes(ecartes) {
+  const body = document.getElementById('ecartes-body');
+  body.innerHTML = '';
+  ecartes.forEach(ec => {
+    const item = document.createElement('div');
+    item.className = 'ecarte-item';
+    item.innerHTML = `
+      <div><div class="ecarte-raison">${RAISON_LABEL[ec.raison] || ec.raison}</div></div>
+      <div style="flex:1">
+        <div class="ecarte-aptitude">${ec.aptitude}</div>
+        ${ec.extrait ? `<div class="ecarte-extrait">« ${ec.extrait} »</div>` : ''}
+      </div>
+      <button class="btn-challenge" data-apt="${ec.aptitude.replace(/"/g,'&quot;')}" onclick="challenge(this.dataset.apt)">Challenger →</button>`;
+    body.appendChild(item);
+  });
+}
+
+function renderForceBars(retenus) {
+  const counts = { verifiee:0, potentielle:0, detaillee:0, candidat:0 };
+  retenus.forEach(bs => counts[bs.force]++);
+  const total = retenus.length || 1;
+  const c = document.getElementById('force-bars');
+  c.innerHTML = '';
+  Object.entries(counts).forEach(([f, n]) => {
+    const pct = Math.round((n/total)*100);
+    c.innerHTML += `
+      <div class="force-bar-row">
+        <span class="force-bar-label ${f}">${FORCE_LABEL[f]}</span>
+        <div class="force-bar-track"><div class="force-bar-fill ${f}" style="width:${pct}%"></div></div>
+        <span class="force-bar-count">${n}</span>
+      </div>`;
+  });
+}
+
+function updateScore() {
+  const retenus = PORTEFEUILLE.portfolio_brut.retenus;
+  let somme = 0;
+  state.validated.forEach(id => {
+    const bs = retenus.find(b => b.id === id);
+    if (bs) somme += FORCE_WEIGHTS[bs.force] || 15;
+  });
+  const score = Math.min(80, Math.round(somme / 5));
+  document.getElementById('score-value').textContent = score;
+  const ring = document.getElementById('score-ring');
+  const color = score >= 30 ? '#16a34a' : '#2563eb';
+  ring.style.background = `conic-gradient(${color} 0% ${score}%, #e2e8f0 ${score}% 100%)`;
+  document.getElementById('score-label').textContent =
+    score === 0 ? 'En construction' : score < 30 ? 'Trop faible pour publier' : 'Publiable ✓';
+  document.getElementById('score-sub').textContent =
+    score === 0 ? "Validez des BioSkills pour l'activer"
+    : score < 30 ? 'Score minimum : 30/80'
+    : 'Seuil atteint — portefeuille activable';
+}
+
+function updateCTA() {
+  const n = state.validated.size;
+  const total = PORTEFEUILLE.portfolio_brut.retenus.length;
+  document.getElementById('cta-validated').textContent = n;
+  document.getElementById('cta-total').textContent = total;
+  // Bouton Constituer retire ; navigation par le bandeau ou "Voir le portefeuille"
+}
+
+// ── Interactions résultats ────────────────────────────────────
+function toggle(id, action) {
+  const card = document.getElementById(`card-${id}`);
+  const vBtn = document.getElementById(`v-${id}`);
+  const rBtn = document.getElementById(`r-${id}`);
+  const pBtn = document.getElementById(`p-${id}`);
+  if (action === 'validate') {
+    const on = !state.validated.has(id);
+    state.validated[on ? 'add' : 'delete'](id);
+    state.rejected.delete(id);
+    card.classList.toggle('validated', on);
+    card.classList.remove('rejected');
+    vBtn.classList.toggle('active', on);
+    vBtn.textContent = on ? '✓ Validé' : '✓ Valider';
+    if (pBtn) pBtn.style.display = on ? '' : 'none';
+    // Retire d'un eventuel ajout au portefeuille si on devalide
+    if (!on) state.enPortefeuille?.delete(id);
+  } else {
+    // Écarter : cache la carte immédiatement
+    state.rejected.add(id);
+    state.validated.delete(id);
+    state.enPortefeuille?.delete(id);
+    if (card) card.style.display = 'none';
+    updateEcartesCounter();
+  }
+  updateScore(); updateCTA();
+  saveSelections();
+  // TODO: PUT /portfolio/bioskills/:id { action: on ? 'VALIDER' : 'REJETER' }
+}
+
+// Ajouter au portefeuille (après validation)
+if (!window.state) window.state = {};
+state.enPortefeuille = state.enPortefeuille || new Set();
+
+// Persistance simple des selections dans localStorage (par user)
+function saveSelections() {
+  if (!state.user?.email) return;
+  const key = 'bahyo_sel_' + state.user.email;
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      validated: [...state.validated],
+      enPortefeuille: [...state.enPortefeuille],
+      rejected: [...state.rejected],
+    }));
+  } catch {}
+}
+function loadSelections() {
+  if (!state.user?.email) return;
+  const key = 'bahyo_sel_' + state.user.email;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    state.validated = new Set(obj.validated || []);
+    state.enPortefeuille = new Set(obj.enPortefeuille || []);
+    state.rejected = new Set(obj.rejected || []);
+    // Reflete sur PORTEFEUILLE
+    const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+    bs.forEach(b => {
+      if (state.enPortefeuille.has(b.id)) {
+        b.valide_par_user = true;
+        if (!b.rang) b.rang = 'PRIMAIRE';
+      }
+    });
+  } catch {}
+}
+
+function addToPf(id) {
+  if (!state.validated.has(id)) { showToast('Validez d\'abord ce BS.'); return; }
+  const on = !state.enPortefeuille.has(id);
+  state.enPortefeuille[on ? 'add' : 'delete'](id);
+  const pBtn = document.getElementById(`p-${id}`);
+  if (pBtn) {
+    pBtn.classList.toggle('active', on);
+    pBtn.textContent = on ? '✓ Au portefeuille' : '➕ Au portefeuille';
+  }
+  // Marque le BS dans PORTEFEUILLE pour le rendu du tableau
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  const item = bs.find(b => String(b.id) === String(id));
+  if (item) { item.valide_par_user = on; if (on && !item.rang) item.rang = 'PRIMAIRE'; }
+  saveSelections();
+  renderPortefeuille();
+  updateCTA();
+  showToast(on ? 'Ajouté au portefeuille' : 'Retiré du portefeuille');
+}
+
+function updateEcartesCounter() {
+  const el = document.getElementById('ecartes-counter');
+  if (el) el.textContent = state.rejected.size;
+}
+
+// Réafficher un BS écarté (au cas où)
+function showEcartes() {
+  document.querySelectorAll('.bs-card').forEach(c => c.style.display = '');
+  state.rejected.clear();
+  updateEcartesCounter();
+}
+
+function selectAll() {
+  PORTEFEUILLE.portfolio_brut.retenus.forEach(bs => {
+    if (!state.validated.has(bs.id)) toggle(bs.id, 'validate');
+  });
+}
+
+function toggleEcartes(btn) {
+  const body = document.getElementById('ecartes-body');
+  const chev = document.getElementById('ecartes-chevron');
+  const open = body.classList.toggle('open');
+  chev.classList.toggle('open', open);
+}
+
+function askAbout(aptitude) {
+  const f = document.getElementById('assistant-float');
+  if (f.style.display === 'none' || !f.style.display) toggleAssistant();
+  const chatTab = document.querySelector('.assistant-tab[data-tab="chat"]');
+  if (chatTab) switchAssistantTab('chat', chatTab);
+  const input = document.getElementById('chat-input');
+  input.value = `Pourquoi « ${aptitude} » a cette force ?`;
+  input.focus();
+}
+
+// Rend la table Portefeuille (BS validés) : BS | Évaluation | Cote | Actions
+function renderPortefeuille() {
+  const tbody = document.getElementById('pf-tbody');
+  if (!tbody) return;
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  const valides = bs.filter(b => b.valide_par_user || b.rang);
+
+  if (!valides.length) {
+    tbody.innerHTML = `<tr class="pf-empty"><td colspan="4">Aucun BioSkill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:#2563eb;text-decoration:underline">Bioskills</a> pour en valider.</td></tr>`;
+  } else {
+    // Barème simple : eval selon complétude 3A ; cote selon force + eval
+    const forceCote = { verifiee: 100, potentielle: 60, detaillee: 35, candidat: 15 };
+    tbody.innerHTML = valides.map(b => {
+      let complet = 0;
+      if (b.aptitude) complet++;
+      if (b.acte) complet++;
+      if (b.tiers) complet++;
+      const evalPct = Math.round((complet / 3) * 100);
+      const evalCls = evalPct >= 66 ? 'high' : evalPct >= 33 ? 'mid' : 'low';
+      const evalTxt = evalPct >= 66 ? 'Solide' : evalPct >= 33 ? 'Partielle' : 'Faible';
+      const cote = Math.round((forceCote[b.force] || 15) * (complet / 3));
+      return `<tr>
+        <td><strong>${escapeHtml(b.aptitude)}</strong>${b.acte ? `<div style="font-size:12px;color:#64748b;margin-top:2px">${escapeHtml(b.acte)}</div>` : ''}</td>
+        <td><span class="pf-eval ${evalCls}">${evalPct}% · ${evalTxt}</span></td>
+        <td class="pf-cote">${cote}</td>
+        <td style="white-space:nowrap">
+          <button class="pf-edit" onclick="editBsFromPf('${b.id}')" title="Optimiser ce BS avec l'assistant (méthode 3A)">✎</button>
+          <button class="pf-remove" onclick="removeFromPortefeuille('${b.id}')" title="Retirer du portefeuille">×</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Stats en tête
+  document.getElementById('pf-count').textContent = valides.length;
+  const sumCote = valides.reduce((acc, b) => {
+    let complet = 0;
+    if (b.aptitude) complet++;
+    if (b.acte) complet++;
+    if (b.tiers) complet++;
+    const forceCote = { verifiee: 100, potentielle: 60, detaillee: 35, candidat: 15 };
+    return acc + Math.round((forceCote[b.force] || 15) * (complet / 3));
+  }, 0);
+  document.getElementById('pf-cote-globale').textContent = valides.length ? sumCote : '—';
+  updateInfoIndicator();
+}
+
+// Editer un BS depuis le Portefeuille : ouvre le formulaire pre-rempli et
+// active l'assistant en mode optimisation.
+function editBsFromPf(id) {
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus || []).find(b => String(b.id) === String(id));
+  if (!bs) { showToast('BS introuvable.'); return; }
+
+  // Pre-remplit le formulaire manuel (screen-bs-manuel)
+  openBsManuel();
+  document.getElementById('bsm-aptitude').value = bs.aptitude || '';
+  document.getElementById('bsm-acte').value     = bs.acte || '';
+  document.getElementById('bsm-extrait').value  = bs.extrait || '';
+  document.getElementById('bsm-tiers').value    = bs.tiers || '';
+  document.getElementById('bsm-force').value    = bs.force || 'candidat';
+  document.getElementById('bsm-rang').value     = bs.rang || 'PRIMAIRE';
+  document.getElementById('bsm-note').value     = bs.note_utilisateur || '';
+
+  // Memorise l'id pour que doSaveBsManuel puisse faire un UPDATE (au lieu d'un INSERT)
+  state.editingBsId = id;
+
+  // Ouvre l'assistant avec suggestion d'optimisation
+  setTimeout(() => {
+    const f = document.getElementById('assistant-float');
+    if (f.style.display === 'none' || !f.style.display) toggleAssistant();
+    const chatTab = document.querySelector('.assistant-tab[data-tab="chat"]');
+    if (chatTab) switchAssistantTab('chat', chatTab);
+    const input = document.getElementById('chat-input');
+    input.value = `Comment améliorer la force et l'attestation de "${bs.aptitude}" pour augmenter sa cote ?`;
+    input.focus();
+  }, 300);
+}
+
+function removeFromPortefeuille(id) {
+  // Retire du state.enPortefeuille + du PORTEFEUILLE mock
+  state.enPortefeuille?.delete(id);
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  const item = bs.find(b => String(b.id) === String(id));
+  if (item) { item.valide_par_user = false; item.rang = null; }
+
+  // Refleter dans l'onglet Bioskills : reset du bouton "Au portefeuille"
+  const pBtn = document.getElementById(`p-${id}`);
+  if (pBtn) {
+    pBtn.classList.remove('active');
+    pBtn.textContent = '+ Au portefeuille';
+  }
+
+  saveSelections();
+  renderPortefeuille();
+  updateCTA();
+}
+
+// Indicateur qté d'info dans le bandeau : ratio BS retenus / total (proxy simple)
+function updateInfoIndicator() {
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  const total = bs.length + ((PORTEFEUILLE?.portfolio_brut?.ecartes) || []).length;
+  const valides = bs.filter(b => b.valide_par_user || b.rang).length;
+  const pct = total ? Math.round((valides / total) * 100) : 0;
+  const box = document.getElementById('nav-info-pct');
+  const val = document.getElementById('nav-info-val');
+  const pfPct = document.getElementById('pf-info-pct');
+  if (box && total) {
+    box.style.display = 'inline-flex';
+    box.style.color = pct >= 50 ? '#86efac' : pct >= 20 ? '#fcd34d' : '#fca5a5';
+  }
+  if (val) val.textContent = pct + ' %';
+  if (pfPct) pfPct.textContent = pct + ' %';
+}
+
+// Évaluateur 3A : calcule le % de BS ayant chaque bloc rempli
+function updateEvaluateur3A() {
+  const list = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  const n = list.length || 1;
+  const nAptitude = list.filter(bs => bs.aptitude && bs.aptitude.trim().length > 2).length;
+  const nActe = list.filter(bs => bs.acte && bs.acte.trim().length > 2).length;
+  const nAttest = list.filter(bs => bs.tiers && bs.tiers.trim().length > 1).length;
+  const pctA1 = Math.round((nAptitude / n) * 100);
+  const pctA2 = Math.round((nActe / n) * 100);
+  const pctA3 = Math.round((nAttest / n) * 100);
+  const set = (id, pct) => {
+    const bar = document.getElementById(id);
+    const label = document.getElementById(id + '-pct');
+    if (bar) bar.style.width = pct + '%';
+    if (label) label.textContent = pct + '%';
+  };
+  set('eval-aptitude', pctA1);
+  set('eval-acte', pctA2);
+  set('eval-attestation', pctA3);
+}
+
+function challenge(aptitude) {
+  document.getElementById('chat-input').value = `"${aptitude}" a été écarté — y a-t-il un geste technique derrière ?`;
+  document.getElementById('chat-input').focus();
+  document.getElementById('chat-input').scrollIntoView({ behavior:'smooth' });
+}
+
+function constituer() {
+  const n = state.validated.size;
+  if (!n) { showToast('Validez d\'abord au moins un BioSkill.'); return; }
+
+  // Marque les BS valides dans PORTEFEUILLE pour le rendu du portefeuille
+  const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
+  bs.forEach(b => {
+    if (state.validated.has(b.id)) {
+      b.valide_par_user = true;
+      if (!b.rang) b.rang = 'PRIMAIRE';
+    }
+  });
+
+  showToast(`${n} BioSkill(s) ajouté(s) au portefeuille.`);
+  renderPortefeuille();
+  showScreen('screen-portefeuille');
+  // TODO: PUT /portfolio/bioskills/:id { action: 'VALIDER', rang } pour chaque valide
+}
+
+// ── Assistant chat ────────────────────────────────────────────
+const MOCK_RESPONSES = [
+  q => /force|vérif/i.test(q)
+    ? "La force **vérifiée** requiert un tiers nommé ET une attestation explicite dans le texte. Sans tiers identifiable, le BS tombe en *potentielle* ou *détaillée* selon la richesse du contexte."
+    : null,
+  q => /écarté|challenger|fonction/i.test(q)
+    ? "Un BS écarté comme « fonction » signifie qu'il n'y a pas de geste technique d'exécution détecté — seulement un rôle. Décrivez un acte précis derrière ce rôle dans un fichier complémentaire et relancez l'analyse."
+    : null,
+  q => /candidat/i.test(q)
+    ? "La force *candidate* est l'état normal à l'extraction brute — une mention sans ancrage. Pour la faire monter : ajoutez un fichier qui cite un tiers et précise le livrable."
+    : null,
+  () => "Je peux vous aider à comprendre la force de chaque BioSkill ou identifier ce qu'il faudrait ajouter pour élever un BS de *candidat* à *vérifiée*. Quelle aptitude vous interpelle ?"
+];
+
+function sendMsg() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  addMsg(msg, 'user');
+  addMsg('…', 'typing');
+  setTimeout(() => {
+    removeTyping();
+    let reply = null;
+    for (const fn of MOCK_RESPONSES) { reply = fn(msg); if (reply) break; }
+    addMsg(reply || MOCK_RESPONSES[MOCK_RESPONSES.length-1](), 'assistant');
+  }, 900);
+}
+
+function addMsg(text, role) {
+  const body = document.getElementById('chat-body');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+
+function removeTyping() {
+  const t = document.querySelector('.msg.typing');
+  if (t) t.remove();
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function showToast(msg, ms = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+updateStepNav('screen-auth');
+checkAnalyzeReady();
+
+// Gestion du retour depuis le lien de vérification email (?verified=1 ou ?verified=0)
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const v = params.get('verified');
+  const resetToken = params.get('reset');
+
+  if (resetToken) {
+    // Lien de reinitialisation de mot de passe
+    state.resetToken = resetToken;
+    showScreen('screen-reset-password');
+    return;
+  }
+
+  if (v === '1') {
+    const err = document.getElementById('login-error');
+    const pending = params.get('pending') === '1';
+    if (pending) {
+      err.style.cssText = 'background:#fef3c7;color:#92400e;border-color:#fcd34d';
+      err.innerHTML = '✓ Email vérifié.<br>⏳ Votre compte est en attente d\'approbation par un administrateur. Vous recevrez un email dès validation.';
+    } else {
+      err.style.cssText = 'background:var(--green-lt);color:var(--green);border-color:#86efac';
+      err.textContent = '✓ Email vérifié ! Vous pouvez maintenant vous connecter.';
+    }
+    err.classList.add('show');
+    history.replaceState({}, '', window.location.pathname);
+  } else if (v === '0') {
+    const err = document.getElementById('login-error');
+    err.classList.add('show');
+    err.innerHTML = 'Lien expiré ou invalide. <a style="cursor:pointer" onclick="doResendVerification()">Renvoyer un nouveau lien</a>.';
+    history.replaceState({}, '', window.location.pathname);
+  }
+});
+</script>
+</body>
+</html>

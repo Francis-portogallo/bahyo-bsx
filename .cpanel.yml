@@ -1,0 +1,22 @@
+---
+deployment:
+  tasks:
+    - export DEPLOY_DIR=/home2/qiyo9734/bsx
+    - export REPO_DIR=/home2/qiyo9734/bahyo-bsx-git
+    # 1. Backend
+    - /bin/mkdir -p $DEPLOY_DIR/src/routes $DEPLOY_DIR/src/middleware $DEPLOY_DIR/src/db
+    - /bin/cp -f $REPO_DIR/src/server.js         $DEPLOY_DIR/src/server.js
+    - /bin/cp -f $REPO_DIR/src/routes/auth.js    $DEPLOY_DIR/src/routes/auth.js
+    - /bin/cp -f $REPO_DIR/src/routes/admin.js   $DEPLOY_DIR/src/routes/admin.js
+    - /bin/cp -f $REPO_DIR/src/routes/sources.js $DEPLOY_DIR/src/routes/sources.js
+    - /bin/cp -f $REPO_DIR/src/routes/portfolio.js $DEPLOY_DIR/src/routes/portfolio.js
+    - /bin/cp -f $REPO_DIR/src/routes/wallet.js  $DEPLOY_DIR/src/routes/wallet.js
+    # 2. Frontend
+    - /bin/mkdir -p $DEPLOY_DIR/public
+    - /bin/cp -f $REPO_DIR/public/index.html     $DEPLOY_DIR/public/index.html
+    # 3. Marqueur de deploiement (timestamp visible dans /health)
+    - /bin/date > $DEPLOY_DIR/.deploy-date
+    # 4. Restart Passenger (methode CloudLinux : touch tmp/restart.txt)
+    - /bin/mkdir -p $DEPLOY_DIR/tmp
+    - /bin/touch $DEPLOY_DIR/tmp/restart.txt
+    - echo "Deploy termine a $(date)"
