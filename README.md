@@ -111,3 +111,4 @@ curl -s https://bsx.bahyo.net/health
 Doit retourner un JSON avec `"version":"1.3.0"` (serveur) et un timestamp récent.
 
 Le fichier `~/bsx/.deploy-date` est écrit à chaque déploiement automatique.
+
