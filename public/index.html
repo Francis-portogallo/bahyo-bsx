@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <!-- bahyo-etage1.html
-     @version 3.0.1
+     @version 3.0.2
      @date    2026-09-11
      @change  3.0.0 — REFONTE 3 ONGLETS :
-                      * Palette v3 : Bio (vert #65a30d) / BScraft
+                      * Palette v3 : Bio (vert #65a30d) / SkillCraft
                         (violet #7c3aed) / IPO (or #d97706) / Talent (cyan #0891b2)
-                      * Bandeau top : 1·Bio · 2·BScraft · 3·IPO
+                      * Bandeau top : 1·Bio · 2·SkillCraft · 3·IPO
                         + solde Talent cliquable (historique) + jauge portefeuille
                       * Bio : bandeau d'accueil dismissible, ton "aventure"
-                      * BScraft : bandeau didactique 3A, piliers visuels dans les BS
+                      * SkillCraft : bandeau didactique 3A, piliers visuels dans les BS
                       * IPO : bandeau IPO, table avec dropdown marchés (10 secteurs),
                         cote suggérée × facteur marché, boutons Talent
                         (Comparables/Simulation/Optimiser), bouton "Introduire en Bourse"
-                      * Économie Talent : 200 initial + 50/BS validé, coûts BScraft
+                      * Économie Talent : 200 initial + 50/BS validé, coûts SkillCraft
                         et IPO configurables via bahyo_config
                       * Traçabilité amont : source_id/source_nom/source_phrase par BS
                       * Didactisme adaptatif : bandeaux visibles pendant les 3 premières
@@ -1177,7 +1177,7 @@ nav {
   border-radius: 12px; font-size: 11px; font-weight: 600;
 }
 
-/* ══════════ Écran BScraft (v3) — accents violets ══════════ */
+/* ══════════ Écran SkillCraft (v3) — accents violets ══════════ */
 #screen-results { --accent: var(--bscraft); --accent-lt: var(--bscraft-lt); }
 #screen-results .section-title { color: var(--bscraft); }
 #screen-results .bs-card { border-left: 3px solid transparent; transition: border-color .15s; }
@@ -1480,11 +1480,11 @@ nav {
   <div class="logo" onclick="goHome()" style="cursor:pointer" title="Retour à l'accueil">Bah<span>yo</span></div>
   <div class="nav-right">
     <div class="nav-step">
-      <span class="step step-bio" id="step1" onclick="navToStep('screen-upload')" style="cursor:pointer" title="Bio : votre matière première (CV, LinkedIn, fichiers)">1 · Bio</span>
+      <span class="step step-bio" id="step1" onclick="navToStep('screen-upload')" style="cursor:pointer" title="BioCraft : ancrer votre matière brute dans le réel (déclaratif → constatatif)">1 · BioCraft</span>
       <span class="nav-sep">›</span>
-      <span class="step step-bscraft" id="step2" onclick="navToStep('screen-results')" style="cursor:pointer" title="BScraft : atelier de fabrication des BioSkills (méthode 3A)">2 · BScraft</span>
+      <span class="step step-bscraft" id="step2" onclick="navToStep('screen-results')" style="cursor:pointer" title="SkillCraft : atelier de fabrication de vos Skills (méthode 3A)">2 · SkillCraft</span>
       <span class="nav-sep">›</span>
-      <span class="step step-ipo" id="step3" onclick="navToStep('screen-portefeuille')" style="cursor:pointer" title="IPO : préparation à la mise en cote du portefeuille">3 · IPO</span>
+      <span class="step step-ipo" id="step3" onclick="navToStep('screen-portefeuille')" style="cursor:pointer" title="QuoteCraft : calibrer la cote de vos Skills par marché">3 · QuoteCraft</span>
     </div>
     <div class="talent-wallet" onclick="openWalletModal()" title="Talents — cliquez pour voir l'historique">
       <span class="talent-icon">◆</span>
@@ -1724,8 +1724,8 @@ nav {
 <div class="screen" id="screen-bs-manuel">
 <div class="bs-manuel-wrap">
   <div class="bs-manuel-head">
-    <h1>Saisir un BioSkill — méthode 3A</h1>
-    <p>Chaque BioSkill s'appuie sur <strong>3 éléments</strong> : une <strong>Aptitude</strong> (le savoir-faire), un <strong>Acte</strong> (l'action concrète qui l'atteste), une <strong>Attestation</strong> (le tiers ou le document qui la valide).</p>
+    <h1>Saisir un Skill — méthode 3A</h1>
+    <p>Chaque Skill s'appuie sur <strong>3 éléments</strong> : une <strong>Aptitude</strong> (le savoir-faire), un <strong>Acte</strong> (l'action concrète qui l'atteste), une <strong>Attestation</strong> (le tiers ou le document qui la valide).</p>
     <button class="btn-back-bs" onclick="showScreen('screen-upload')">← Retour aux sources</button>
   </div>
 
@@ -1800,7 +1800,7 @@ nav {
 
     <div class="bs-actions">
       <button class="btn-secondary" onclick="showScreen('screen-upload')">Annuler</button>
-      <button class="btn-primary" onclick="doSaveBsManuel()">Enregistrer le BS →</button>
+      <button class="btn-primary" onclick="doSaveBsManuel()">Enregistrer le Skill →</button>
     </div>
   </div>
 </div>
@@ -1827,7 +1827,7 @@ nav {
       <div class="ob-section">
         <div class="ob-section-title">Ce qui est nouveau</div>
         <div class="ob-new-box">
-          Bahyo a évolué. <strong>L'Étage 1</strong> extrait maintenant vos BioSkills <em>directement depuis vos textes</em> — plus de matching algorithmique sur un catalogue. Chaque compétence est qualifiée par sa <strong>force de preuve</strong> (vérifiée, potentielle, détaillée, candidate) et tracée jusqu'à la phrase de votre profil qui l'ancre.<br><br>
+          Bahyo a évolué. <strong>L'Étage 1</strong> extrait maintenant vos Skills <em>directement depuis vos textes</em> — plus de matching algorithmique sur un catalogue. Chaque compétence est qualifiée par sa <strong>force de preuve</strong> (vérifiée, potentielle, détaillée, candidate) et tracée jusqu'à la phrase de votre profil qui l'ancre.<br><br>
           Pour lancer cette extraction, nous avons besoin de votre profil actualisé.
         </div>
       </div>
@@ -1872,7 +1872,7 @@ nav {
       <div class="ob-section">
         <div class="ob-section-title">Consentement — traitement mis à jour</div>
         <div class="ob-consent">
-          Bahyo traitera votre export LinkedIn pour en extraire vos BioSkills. Ces données restent confidentielles et ne sont partagées qu'avec vous. Vous pouvez à tout moment supprimer votre portefeuille depuis votre espace.
+          Bahyo traitera votre export LinkedIn pour en extraire vos Skills. Ces données restent confidentielles et ne sont partagées qu'avec vous. Vous pouvez à tout moment supprimer votre portefeuille depuis votre espace.
           <div class="ob-consent-check">
             <input type="checkbox" id="ob-consent-check" onchange="updateObCta()">
             <label for="ob-consent-check">Je consens à ce traitement et confirme que les données que je fournis me concernent personnellement.</label>
@@ -1913,15 +1913,15 @@ nav {
   <!-- Bandeau d'accueil didactique (visible 1re session, dismissible) -->
   <div class="bio-welcome" id="bio-welcome" style="display:none">
     <button class="close-welcome" onclick="dismissBioWelcome()">×</button>
-    <h2>🌿 Bienvenue dans votre Bio</h2>
+    <h2>🌿 Bienvenue dans BioCraft</h2>
     <p>
-      Bahyo vous a crédité de <strong>200 Talent</strong> pour commencer votre aventure. Déposez ici votre matière première (profil public, CV, notes…) : chaque source enrichit votre bio. Ensuite, dans l'atelier <strong>BScraft</strong>, vous transformerez cette matière en <strong>BioSkills</strong> — vos compétences discrétisées et cotables. Chaque BS validé vous rapportera <strong>+50 Talent</strong>.
+      Bahyo vous a crédité de <strong>200 Talent</strong> pour commencer votre aventure. Déposez ici votre matière première (profil public, CV, notes…) : chaque source enrichit votre bio. Ensuite, dans l'atelier <strong>SkillCraft</strong>, vous transformerez cette matière en <strong>Skills</strong> — vos compétences discrétisées et cotables. Chaque Skill validé vous rapportera <strong>+50 Talent</strong>.
     </p>
   </div>
 
   <div class="upload-hero">
-    <h1>Votre Bio</h1>
-    <p>La matière vivante dont sont extraits vos BioSkills. Déposez ici votre profil public et vos fichiers privés.</p>
+    <h1>BioCraft</h1>
+    <p>La matière vivante dont seront cristallisés vos Skills. Déposez ici votre profil public et vos fichiers privés.</p>
   </div>
 
   <!-- Fil directeur : LN/IG + URL + drop ZIP -->
@@ -1996,7 +1996,7 @@ nav {
         <span>ou</span>
       </div>
       <button type="button" class="btn-bs-manuel" onclick="openBsManuel()">
-        ✍️ Saisir un BioSkill directement (méthode 3A)
+        ✍️ Saisir un Skill directement (méthode 3A)
       </button>
       <div style="font-size:12px;color:#94a3b8;margin-top:6px;text-align:center">
         Utile si vous voulez ajouter une compétence attestée par un projet, un témoignage, une recommandation…
@@ -2058,16 +2058,16 @@ nav {
       <div class="stats-row" id="stats-row"></div>
     </div>
 
-    <!-- BioSkills retenus -->
+    <!-- Skills retenus -->
     <div class="section-head">
       <div class="ipo-welcome" id="bscraft-welcome" style="display:none;background:linear-gradient(135deg,var(--bscraft-lt),#fdf4ff);border-left-color:var(--bscraft)">
         <button class="close-welcome" onclick="dismissBscraftWelcome()" style="position:absolute;top:8px;right:10px;background:none;border:0;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
-        <h3 style="color:var(--bscraft)">🔨 Bienvenue dans l'atelier BScraft</h3>
+        <h3 style="color:var(--bscraft)">🔨 Bienvenue dans l'atelier SkillCraft</h3>
         <p>
-          Vos sources ont été transformées en <strong>BioSkills candidats</strong>. Chaque BS respecte (ou aspire à respecter) la méthode <strong>3A</strong> : une <strong>Aptitude</strong> (le savoir), un <strong>Acte</strong> (l'exercice), une <strong>Attestation</strong> (le tiers qui valide). Sans les 3, le BS reste au régime déclaratif. Validez ceux qui vous ressemblent — <strong>+50 Talent par validation</strong>. L'assistant BScraft (bulle violette en bas) vous aide à renforcer chaque bloc (coûte des Talent).
+          Vos sources ont été transformées en <strong>Skills candidats</strong>. Chaque BS respecte (ou aspire à respecter) la méthode <strong>3A</strong> : une <strong>Aptitude</strong> (le savoir), un <strong>Acte</strong> (l'exercice), une <strong>Attestation</strong> (le tiers qui valide). Sans les 3, le BS reste au régime déclaratif. Validez ceux qui vous ressemblent — <strong>+50 Talent par validation</strong>. L'assistant SkillCraft (bulle violette en bas) vous aide à renforcer chaque bloc (coûte des Talent).
         </p>
       </div>
-      <div class="section-title">BioSkills extraits — Atelier BScraft</div>
+      <div class="section-title">Skills extraits — Atelier SkillCraft</div>
       <div class="section-count" id="retenus-count"></div>
     </div>
     <div class="bs-list" id="bs-list"></div>
@@ -2099,7 +2099,7 @@ nav {
         </div>
         <div class="score-info">
           <div class="score-label" id="score-label">En construction</div>
-          <div class="score-sub" id="score-sub">Validez des BioSkills pour l'activer</div>
+          <div class="score-sub" id="score-sub">Validez des Skills pour l'activer</div>
         </div>
       </div>
       <div class="force-bars" id="force-bars"></div>
@@ -2141,7 +2141,7 @@ nav {
 <!-- CTA résultats -->
 <div class="cta-bar">
   <div class="cta-info">
-    <strong id="cta-validated">0</strong> BioSkill(s) sélectionné(s) sur <span id="cta-total">0</span>
+    <strong id="cta-validated">0</strong> Skill(s) sélectionné(s) sur <span id="cta-total">0</span>
   </div>
   <div class="cta-actions">
     <button class="btn-secondary" onclick="selectAll()">Tout valider</button>
@@ -2179,7 +2179,7 @@ nav {
     <!-- Portefeuille (fonctionnel) -->
     <div class="compte-block">
       <h3>Mon portefeuille</h3>
-      <div class="compte-row"><span class="compte-label">BioSkills en cours</span><span class="compte-val" id="cpt-bs-count">0</span></div>
+      <div class="compte-row"><span class="compte-label">Skills en cours</span><span class="compte-val" id="cpt-bs-count">0</span></div>
       <div class="compte-row"><span class="compte-label">Cote globale</span><span class="compte-val" id="cpt-cote">—</span></div>
       <div class="compte-row"><span class="compte-label">Statut du portefeuille</span><span class="compte-val" id="cpt-pf-statut">Brouillon</span></div>
       <div class="compte-row"><span class="compte-label">Dernière analyse</span><span class="compte-val" id="cpt-last-analyse">—</span></div>
@@ -2297,16 +2297,16 @@ nav {
   <div class="portefeuille-wrap">
     <div class="ipo-welcome" id="ipo-welcome" style="display:none">
       <button class="close-welcome" onclick="dismissIPOWelcome()" style="position:absolute;top:8px;right:10px;background:none;border:0;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
-      <h3>🏛 Vous préparez votre IPO</h3>
+      <h3>🎯 Bienvenue dans QuoteCraft</h3>
       <p>
-        Ici, vous préparez la <strong>mise en cote</strong> de vos BioSkills sur la Bourse Bahyo (Étage 2). Ce n'est plus un CV. Vos compétences deviennent un <strong>patrimoine</strong> que vous cotez, marché par marché. Consultez la table, ajustez les cotes demandées et le marché cible, puis lancez votre <strong>IPO</strong> quand vous êtes prêt.
+        Ici, vous préparez la <strong>mise en cote</strong> de vos Skills sur la Bourse Bahyo (Étage 2). Ce n'est plus un CV. Vos compétences deviennent un <strong>patrimoine</strong> que vous cotez, marché par marché. Consultez la table, ajustez les cotes demandées et le marché cible, puis lancez votre <strong>IPO</strong> quand vous êtes prêt.
       </p>
     </div>
     <div class="portefeuille-head">
-      <h1>🏛 Préparation à l'IPO</h1>
+      <h1>🎯 QuoteCraft</h1>
       <div class="portefeuille-stats">
         <div class="pf-stat">
-          <div class="pf-stat-label">BioSkills retenus</div>
+          <div class="pf-stat-label">Skills retenus</div>
           <div class="pf-stat-value" id="pf-count">0</div>
         </div>
         <div class="pf-stat">
@@ -2323,7 +2323,7 @@ nav {
     <table class="pf-table">
       <thead>
         <tr>
-          <th style="width:40%">BioSkill</th>
+          <th style="width:40%">Skill</th>
           <th style="width:15%">Évaluation 3A</th>
           <th style="width:15%">Marché cible</th>
           <th style="width:15%">Cote suggérée</th>
@@ -2331,7 +2331,7 @@ nav {
         </tr>
       </thead>
       <tbody id="pf-tbody">
-        <tr class="pf-empty"><td colspan="5">Aucun BioSkill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:var(--bscraft);text-decoration:underline">BScraft</a> pour en valider.</td></tr>
+        <tr class="pf-empty"><td colspan="5">Aucun Skill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:var(--bscraft);text-decoration:underline">SkillCraft</a> pour en valider.</td></tr>
       </tbody>
     </table>
 
@@ -2339,14 +2339,14 @@ nav {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_COMPAR')" title="Analyse de comparables : -20 Talent">📊 Comparables (−20)</button>
         <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_SIMUL')"  title="Simulation de marché : -15 Talent">🎲 Simulation (−15)</button>
-        <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_OPTIM')"  title="Optimisation de la cote globale par BScraft : -50 Talent">✨ Optimiser (−50)</button>
+        <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_OPTIM')"  title="Optimisation de la cote globale par SkillCraft : -50 Talent">✨ Optimiser (−50)</button>
       </div>
       <button class="btn-primary" onclick="lancerIPO()" style="background:linear-gradient(135deg,var(--ipo),var(--ipo-mid));box-shadow:0 4px 14px rgba(217,119,6,.4)">
         🏛 Introduire mon portefeuille en Bourse
       </button>
     </div>
 
-    <p class="pf-hint">💡 Chaque BS est évalué sur la complétude 3A. La cote suggérée = force × complétude × facteur marché. Ajustez le marché cible et la cote demandée avant l'IPO.</p>
+    <p class="pf-hint">💡 Chaque Skill est évalué sur la complétude 3A. La cote suggérée = force × complétude × facteur marché. Ajustez le marché cible et la cote demandée avant l'IPO.</p>
   </div>
 </div><!-- /screen-portefeuille -->
 
@@ -2372,7 +2372,7 @@ nav {
   <div class="assistant-tab-content" id="tab-chat">
     <div class="chat-body" id="chat-body">
       <div class="msg assistant">
-        Bonjour ! Je peux vous expliquer les BioSkills extraits de vos textes et vous aider à enrichir leur ancrage. Que souhaitez-vous savoir ?
+        Bonjour ! Je peux vous expliquer les Skills extraits de vos textes et vous aider à enrichir leur ancrage. Que souhaitez-vous savoir ?
       </div>
     </div>
     <div class="chat-input-row">
@@ -3825,7 +3825,7 @@ async function setBsMarche(bsId, marche) {
 
 function lancerIPO() {
   const bs = (PORTEFEUILLE?.portfolio_brut?.retenus || []).filter(b => b.valide_par_user || b.rang);
-  if (!bs.length) { showToast('Ajoutez au moins un BS validé au portefeuille.'); return; }
+  if (!bs.length) { showToast('Ajoutez au moins un Skill validé au portefeuille.'); return; }
   if (bs.length < 3) {
     showToast('Un portefeuille minimum de 3 BS est recommandé pour l\'IPO.', 5000);
   }
@@ -4252,7 +4252,7 @@ function updateScore() {
   document.getElementById('score-label').textContent =
     score === 0 ? 'En construction' : score < 30 ? 'Trop faible pour publier' : 'Publiable ✓';
   document.getElementById('score-sub').textContent =
-    score === 0 ? "Validez des BioSkills pour l'activer"
+    score === 0 ? "Validez des Skills pour l'activer"
     : score < 30 ? 'Score minimum : 30/80'
     : 'Seuil atteint — portefeuille activable';
 }
@@ -4421,7 +4421,7 @@ function renderPortefeuille() {
   const valides = bs.filter(b => b.valide_par_user || b.rang);
 
   if (!valides.length) {
-    tbody.innerHTML = `<tr class="pf-empty"><td colspan="5">Aucun BioSkill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:var(--bscraft);text-decoration:underline">BScraft</a> pour en valider.</td></tr>`;
+    tbody.innerHTML = `<tr class="pf-empty"><td colspan="5">Aucun Skill dans le portefeuille. Retournez à l'onglet <a onclick="navToStep('screen-results')" style="cursor:pointer;color:var(--bscraft);text-decoration:underline">SkillCraft</a> pour en valider.</td></tr>`;
   } else {
     const forceCote = { verifiee: 100, potentielle: 60, detaillee: 35, candidat: 15 };
     const marcheFacteur = { TECH: 1.2, FINANCE: 1.3, CONSEIL: 1.15, INDUSTRIE: 1.1, EDUCATION: 0.9, SANTE: 1.1, ARTS: 0.85, COMMERCE: 1.0, PUBLIC: 0.95, AUTRE: 1.0 };
@@ -4455,7 +4455,7 @@ function renderPortefeuille() {
         </td>
         <td class="pf-cote" style="color:var(--ipo);font-size:15px">${cote} <span style="font-size:11px;color:#94a3b8">×${facteur}</span></td>
         <td style="white-space:nowrap">
-          <button class="pf-edit" onclick="editBsFromPf('${b.id}')" title="Optimiser ce BS avec BScraft">✎</button>
+          <button class="pf-edit" onclick="editBsFromPf('${b.id}')" title="Optimiser ce BS avec SkillCraft">✎</button>
           <button class="pf-remove" onclick="removeFromPortefeuille('${b.id}')" title="Retirer du portefeuille">×</button>
         </td>
       </tr>`;
@@ -4572,7 +4572,7 @@ function challenge(aptitude) {
 
 function constituer() {
   const n = state.validated.size;
-  if (!n) { showToast('Validez d\'abord au moins un BioSkill.'); return; }
+  if (!n) { showToast('Validez d\'abord au moins un Skill.'); return; }
 
   // Marque les BS valides dans PORTEFEUILLE pour le rendu du portefeuille
   const bs = (PORTEFEUILLE?.portfolio_brut?.retenus) || [];
@@ -4583,7 +4583,7 @@ function constituer() {
     }
   });
 
-  showToast(`${n} BioSkill(s) ajouté(s) au portefeuille.`);
+  showToast(`${n} Skill(s) ajouté(s) au portefeuille.`);
   renderPortefeuille();
   showScreen('screen-portefeuille');
   // TODO: PUT /portfolio/bioskills/:id { action: 'VALIDER', rang } pour chaque valide
@@ -4600,7 +4600,7 @@ const MOCK_RESPONSES = [
   q => /candidat/i.test(q)
     ? "La force *candidate* est l'état normal à l'extraction brute — une mention sans ancrage. Pour la faire monter : ajoutez un fichier qui cite un tiers et précise le livrable."
     : null,
-  () => "Je peux vous aider à comprendre la force de chaque BioSkill ou identifier ce qu'il faudrait ajouter pour élever un BS de *candidat* à *vérifiée*. Quelle aptitude vous interpelle ?"
+  () => "Je peux vous aider à comprendre la force de chaque Skill ou identifier ce qu'il faudrait ajouter pour élever un Skill de *candidat* à *vérifiée*. Quelle aptitude vous interpelle ?"
 ];
 
 function sendMsg() {
