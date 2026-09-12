@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <!-- bahyo-etage1.html
-     @version 3.0.0
+     @version 3.0.1
      @date    2026-09-11
      @change  3.0.0 — REFONTE 3 ONGLETS :
-                      * Palette v3 : Terroir (vert #65a30d) / BScraft
-                        (violet #7c3aed) / Antichambre (or #d97706) / Talent (cyan #0891b2)
-                      * Bandeau top : 1·Terroir · 2·BScraft · 3·Antichambre
+                      * Palette v3 : Bio (vert #65a30d) / BScraft
+                        (violet #7c3aed) / IPO (or #d97706) / Talent (cyan #0891b2)
+                      * Bandeau top : 1·Bio · 2·BScraft · 3·IPO
                         + solde Talent cliquable (historique) + jauge portefeuille
-                      * Terroir : bandeau d'accueil dismissible, ton "aventure"
+                      * Bio : bandeau d'accueil dismissible, ton "aventure"
                       * BScraft : bandeau didactique 3A, piliers visuels dans les BS
-                      * Antichambre : bandeau IPO, table avec dropdown marchés (10 secteurs),
+                      * IPO : bandeau IPO, table avec dropdown marchés (10 secteurs),
                         cote suggérée × facteur marché, boutons Talent
                         (Comparables/Simulation/Optimiser), bouton "Introduire en Bourse"
                       * Économie Talent : 200 initial + 50/BS validé, coûts BScraft
-                        et Antichambre configurables via bahyo_config
+                        et IPO configurables via bahyo_config
                       * Traçabilité amont : source_id/source_nom/source_phrase par BS
                       * Didactisme adaptatif : bandeaux visibles pendant les 3 premières
                         sessions (sessions_count), dismissible par localStorage
@@ -224,15 +224,15 @@
   --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
 
   /* ══ Palette Bahyo v3 — identités chromatiques par onglet ══ */
-  --terroir:      #65a30d;   /* vert sauge — organique, familier */
-  --terroir-lt:   #f7fee7;
-  --terroir-mid:  #84cc16;
+  --bio:      #65a30d;   /* vert sauge — organique, familier */
+  --bio-lt:   #f7fee7;
+  --bio-mid:  #84cc16;
   --bscraft:      #7c3aed;   /* violet indigo — atelier créatif */
   --bscraft-lt:   #f5f3ff;
   --bscraft-mid:  #8b5cf6;
-  --antichambre:  #d97706;   /* or ambre — prestige, bourse */
-  --antichambre-lt: #fffbeb;
-  --antichambre-mid: #f59e0b;
+  --ipo:  #d97706;   /* or ambre — prestige, bourse */
+  --ipo-lt: #fffbeb;
+  --ipo-mid: #f59e0b;
   --talent:       #0891b2;   /* cyan — énergie fluide */
   --talent-lt:    #ecfeff;
   --talent-mid:   #06b6d4;
@@ -1121,9 +1121,9 @@ nav {
 .admin-row-add input { flex: 1; }
 /* ══════════ Bandeau v3 : étapes colorées + Talent + jauge ══════════ */
 .step { transition: all .2s; }
-.step-terroir.active     { color: var(--terroir); border-bottom: 2px solid var(--terroir); }
+.step-bio.active     { color: var(--bio); border-bottom: 2px solid var(--bio); }
 .step-bscraft.active     { color: var(--bscraft); border-bottom: 2px solid var(--bscraft); }
-.step-antichambre.active { color: var(--antichambre); border-bottom: 2px solid var(--antichambre); }
+.step-ipo.active { color: var(--ipo); border-bottom: 2px solid var(--ipo); }
 .step.done { color: rgba(255,255,255,.6); }
 
 .talent-wallet {
@@ -1148,30 +1148,30 @@ nav {
 }
 .pf-gauge-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--terroir), var(--bscraft), var(--antichambre));
+  background: linear-gradient(90deg, var(--bio), var(--bscraft), var(--ipo));
   transition: width .5s ease-out;
 }
 .pf-gauge-label { font-size: 11px; color: rgba(255,255,255,.7); font-weight: 600; }
 
-/* ══════════ Écran Terroir (v3) — accents verts ══════════ */
-#screen-upload .section-card-icon.ln { background: var(--terroir-lt); color: var(--terroir); }
+/* ══════════ Écran Bio (v3) — accents verts ══════════ */
+#screen-upload .section-card-icon.ln { background: var(--bio-lt); color: var(--bio); }
 #screen-upload .btn-analyze {
-  background: linear-gradient(135deg, var(--terroir), var(--bscraft));
+  background: linear-gradient(135deg, var(--bio), var(--bscraft));
   box-shadow: 0 4px 14px rgba(101,163,13,.35);
 }
-.terroir-welcome {
-  background: linear-gradient(135deg, var(--terroir-lt), var(--talent-lt));
-  border-left: 4px solid var(--terroir);
+.bio-welcome {
+  background: linear-gradient(135deg, var(--bio-lt), var(--talent-lt));
+  border-left: 4px solid var(--bio);
   padding: 16px 20px; margin: 0 auto 16px; max-width: 900px;
   border-radius: 10px; position: relative;
 }
-.terroir-welcome h2 { margin: 0 0 6px 0; color: var(--terroir); font-size: 17px; }
-.terroir-welcome p  { margin: 0; color: #334155; font-size: 13px; line-height: 1.6; }
-.terroir-welcome .close-welcome {
+.bio-welcome h2 { margin: 0 0 6px 0; color: var(--bio); font-size: 17px; }
+.bio-welcome p  { margin: 0; color: #334155; font-size: 13px; line-height: 1.6; }
+.bio-welcome .close-welcome {
   position: absolute; top: 10px; right: 12px;
   background: none; border: 0; color: #94a3b8; cursor: pointer; font-size: 18px;
 }
-.terroir-yield {
+.bio-yield {
   display: inline-block; margin-left: 8px; padding: 2px 8px;
   background: var(--talent-lt); color: var(--talent);
   border-radius: 12px; font-size: 11px; font-weight: 600;
@@ -1182,7 +1182,7 @@ nav {
 #screen-results .section-title { color: var(--bscraft); }
 #screen-results .bs-card { border-left: 3px solid transparent; transition: border-color .15s; }
 #screen-results .bs-card:hover { border-left-color: var(--bscraft); }
-#screen-results .bs-card.validated { border-left-color: var(--terroir); background: var(--terroir-lt); }
+#screen-results .bs-card.validated { border-left-color: var(--bio); background: var(--bio-lt); }
 .bscraft-3a-pillars {
   display: inline-flex; gap: 4px; margin-left: 8px;
 }
@@ -1196,18 +1196,18 @@ nav {
   box-shadow: 0 6px 20px rgba(124,58,237,.4);
 }
 
-/* ══════════ Écran Antichambre (v3) — accents or ambre ══════════ */
-#screen-portefeuille { background: linear-gradient(180deg, var(--antichambre-lt) 0%, transparent 200px); }
-#screen-portefeuille h1 { color: var(--antichambre); }
-#screen-portefeuille .pf-stat { border-left: 3px solid var(--antichambre); background: var(--antichambre-lt); }
-#screen-portefeuille .pf-stat-value { color: var(--antichambre); }
-.antichambre-welcome {
-  background: linear-gradient(135deg, var(--antichambre-lt), #fef3c7);
-  border-left: 4px solid var(--antichambre);
+/* ══════════ Écran IPO (v3) — accents or ambre ══════════ */
+#screen-portefeuille { background: linear-gradient(180deg, var(--ipo-lt) 0%, transparent 200px); }
+#screen-portefeuille h1 { color: var(--ipo); }
+#screen-portefeuille .pf-stat { border-left: 3px solid var(--ipo); background: var(--ipo-lt); }
+#screen-portefeuille .pf-stat-value { color: var(--ipo); }
+.ipo-welcome {
+  background: linear-gradient(135deg, var(--ipo-lt), #fef3c7);
+  border-left: 4px solid var(--ipo);
   padding: 14px 20px; margin: 0 0 16px 0; border-radius: 10px; position: relative;
 }
-.antichambre-welcome h3 { margin: 0 0 4px 0; color: var(--antichambre); font-size: 15px; }
-.antichambre-welcome p  { margin: 0; color: #334155; font-size: 13px; line-height: 1.5; }
+.ipo-welcome h3 { margin: 0 0 4px 0; color: var(--ipo); font-size: 15px; }
+.ipo-welcome p  { margin: 0; color: #334155; font-size: 13px; line-height: 1.5; }
 
 /* Modal Wallet (historique Talent) */
 .wallet-modal-body { padding: 0 !important; max-height: 400px; overflow-y: auto; }
@@ -1219,7 +1219,7 @@ nav {
 .wallet-tx .desc { color: #334155; flex: 1; }
 .wallet-tx .date { color: #94a3b8; font-size: 11px; margin-right: 10px; }
 .wallet-tx .amt { font-weight: 700; min-width: 60px; text-align: right; }
-.wallet-tx .amt.pos { color: var(--terroir); }
+.wallet-tx .amt.pos { color: var(--bio); }
 .wallet-tx .amt.neg { color: var(--red); }
 
 /* Modal NDA */
@@ -1480,11 +1480,11 @@ nav {
   <div class="logo" onclick="goHome()" style="cursor:pointer" title="Retour à l'accueil">Bah<span>yo</span></div>
   <div class="nav-right">
     <div class="nav-step">
-      <span class="step step-terroir" id="step1" onclick="navToStep('screen-upload')" style="cursor:pointer" title="Terroir : votre matière première (CV, LinkedIn, fichiers)">1 · Terroir</span>
+      <span class="step step-bio" id="step1" onclick="navToStep('screen-upload')" style="cursor:pointer" title="Bio : votre matière première (CV, LinkedIn, fichiers)">1 · Bio</span>
       <span class="nav-sep">›</span>
       <span class="step step-bscraft" id="step2" onclick="navToStep('screen-results')" style="cursor:pointer" title="BScraft : atelier de fabrication des BioSkills (méthode 3A)">2 · BScraft</span>
       <span class="nav-sep">›</span>
-      <span class="step step-antichambre" id="step3" onclick="navToStep('screen-portefeuille')" style="cursor:pointer" title="Antichambre : préparation à la mise en cote du portefeuille">3 · Antichambre</span>
+      <span class="step step-ipo" id="step3" onclick="navToStep('screen-portefeuille')" style="cursor:pointer" title="IPO : préparation à la mise en cote du portefeuille">3 · IPO</span>
     </div>
     <div class="talent-wallet" onclick="openWalletModal()" title="Talents — cliquez pour voir l'historique">
       <span class="talent-icon">◆</span>
@@ -1911,17 +1911,17 @@ nav {
 <div class="upload-layout">
 
   <!-- Bandeau d'accueil didactique (visible 1re session, dismissible) -->
-  <div class="terroir-welcome" id="terroir-welcome" style="display:none">
-    <button class="close-welcome" onclick="dismissTerroirWelcome()">×</button>
-    <h2>🌿 Bienvenue dans votre Terroir</h2>
+  <div class="bio-welcome" id="bio-welcome" style="display:none">
+    <button class="close-welcome" onclick="dismissBioWelcome()">×</button>
+    <h2>🌿 Bienvenue dans votre Bio</h2>
     <p>
-      Bahyo vous a crédité de <strong>200 Talent</strong> pour commencer votre aventure. Déposez ici votre matière première (profil public, CV, notes…) : chaque source enrichit votre terroir. Ensuite, dans l'atelier <strong>BScraft</strong>, vous transformerez cette matière en <strong>BioSkills</strong> — vos compétences discrétisées et cotables. Chaque BS validé vous rapportera <strong>+50 Talent</strong>.
+      Bahyo vous a crédité de <strong>200 Talent</strong> pour commencer votre aventure. Déposez ici votre matière première (profil public, CV, notes…) : chaque source enrichit votre bio. Ensuite, dans l'atelier <strong>BScraft</strong>, vous transformerez cette matière en <strong>BioSkills</strong> — vos compétences discrétisées et cotables. Chaque BS validé vous rapportera <strong>+50 Talent</strong>.
     </p>
   </div>
 
   <div class="upload-hero">
-    <h1>Votre Terroir</h1>
-    <p>Le sol dont sont extraits vos BioSkills. Déposez ici votre profil public et vos fichiers privés.</p>
+    <h1>Votre Bio</h1>
+    <p>La matière vivante dont sont extraits vos BioSkills. Déposez ici votre profil public et vos fichiers privés.</p>
   </div>
 
   <!-- Fil directeur : LN/IG + URL + drop ZIP -->
@@ -2060,7 +2060,7 @@ nav {
 
     <!-- BioSkills retenus -->
     <div class="section-head">
-      <div class="antichambre-welcome" id="bscraft-welcome" style="display:none;background:linear-gradient(135deg,var(--bscraft-lt),#fdf4ff);border-left-color:var(--bscraft)">
+      <div class="ipo-welcome" id="bscraft-welcome" style="display:none;background:linear-gradient(135deg,var(--bscraft-lt),#fdf4ff);border-left-color:var(--bscraft)">
         <button class="close-welcome" onclick="dismissBscraftWelcome()" style="position:absolute;top:8px;right:10px;background:none;border:0;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
         <h3 style="color:var(--bscraft)">🔨 Bienvenue dans l'atelier BScraft</h3>
         <p>
@@ -2295,15 +2295,15 @@ nav {
 <!-- ══════════════════════════════════════════════════════════ -->
 <div class="screen" id="screen-portefeuille">
   <div class="portefeuille-wrap">
-    <div class="antichambre-welcome" id="antichambre-welcome" style="display:none">
-      <button class="close-welcome" onclick="dismissAntichambreWelcome()" style="position:absolute;top:8px;right:10px;background:none;border:0;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
-      <h3>🏛 Vous entrez dans l'Antichambre</h3>
+    <div class="ipo-welcome" id="ipo-welcome" style="display:none">
+      <button class="close-welcome" onclick="dismissIPOWelcome()" style="position:absolute;top:8px;right:10px;background:none;border:0;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
+      <h3>🏛 Vous préparez votre IPO</h3>
       <p>
         Ici, vous préparez la <strong>mise en cote</strong> de vos BioSkills sur la Bourse Bahyo (Étage 2). Ce n'est plus un CV. Vos compétences deviennent un <strong>patrimoine</strong> que vous cotez, marché par marché. Consultez la table, ajustez les cotes demandées et le marché cible, puis lancez votre <strong>IPO</strong> quand vous êtes prêt.
       </p>
     </div>
     <div class="portefeuille-head">
-      <h1>🏛 Antichambre de la cotation</h1>
+      <h1>🏛 Préparation à l'IPO</h1>
       <div class="portefeuille-stats">
         <div class="pf-stat">
           <div class="pf-stat-label">BioSkills retenus</div>
@@ -2341,7 +2341,7 @@ nav {
         <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_SIMUL')"  title="Simulation de marché : -15 Talent">🎲 Simulation (−15)</button>
         <button class="btn-secondary" onclick="spendTalent('ANTICHAMBRE_OPTIM')"  title="Optimisation de la cote globale par BScraft : -50 Talent">✨ Optimiser (−50)</button>
       </div>
-      <button class="btn-primary" onclick="lancerIPO()" style="background:linear-gradient(135deg,var(--antichambre),var(--antichambre-mid));box-shadow:0 4px 14px rgba(217,119,6,.4)">
+      <button class="btn-primary" onclick="lancerIPO()" style="background:linear-gradient(135deg,var(--ipo),var(--ipo-mid));box-shadow:0 4px 14px rgba(217,119,6,.4)">
         🏛 Introduire mon portefeuille en Bourse
       </button>
     </div>
@@ -3838,26 +3838,26 @@ function lancerIPO() {
 function showWelcomeIfFirstSessions() {
   const n = state.user?.sessions_count || 0;
   // Affiche les bandeaux d'accueil pendant les 3 premières sessions
-  const keyT = 'bahyo_welcome_terroir_dismissed';
+  const keyT = 'bahyo_welcome_bio_dismissed';
   const keyB = 'bahyo_welcome_bscraft_dismissed';
-  const keyA = 'bahyo_welcome_antichambre_dismissed';
+  const keyA = 'bahyo_welcome_ipo_dismissed';
   if (n <= 3) {
-    if (!localStorage.getItem(keyT)) document.getElementById('terroir-welcome')?.style.setProperty('display','block');
+    if (!localStorage.getItem(keyT)) document.getElementById('bio-welcome')?.style.setProperty('display','block');
     if (!localStorage.getItem(keyB)) document.getElementById('bscraft-welcome')?.style.setProperty('display','block');
-    if (!localStorage.getItem(keyA)) document.getElementById('antichambre-welcome')?.style.setProperty('display','block');
+    if (!localStorage.getItem(keyA)) document.getElementById('ipo-welcome')?.style.setProperty('display','block');
   }
 }
-function dismissTerroirWelcome() {
-  document.getElementById('terroir-welcome').style.display = 'none';
-  try { localStorage.setItem('bahyo_welcome_terroir_dismissed', '1'); } catch {}
+function dismissBioWelcome() {
+  document.getElementById('bio-welcome').style.display = 'none';
+  try { localStorage.setItem('bahyo_welcome_bio_dismissed', '1'); } catch {}
 }
 function dismissBscraftWelcome() {
   document.getElementById('bscraft-welcome').style.display = 'none';
   try { localStorage.setItem('bahyo_welcome_bscraft_dismissed', '1'); } catch {}
 }
-function dismissAntichambreWelcome() {
-  document.getElementById('antichambre-welcome').style.display = 'none';
-  try { localStorage.setItem('bahyo_welcome_antichambre_dismissed', '1'); } catch {}
+function dismissIPOWelcome() {
+  document.getElementById('ipo-welcome').style.display = 'none';
+  try { localStorage.setItem('bahyo_welcome_ipo_dismissed', '1'); } catch {}
 }
 
 // Met à jour la jauge portefeuille dans le bandeau top
@@ -4413,7 +4413,7 @@ async function chargerMarches() {
   } catch {}
 }
 
-// Rend la table Antichambre : BS | Éval 3A | Marché cible | Cote suggérée | Actions
+// Rend la table IPO : BS | Éval 3A | Marché cible | Cote suggérée | Actions
 function renderPortefeuille() {
   const tbody = document.getElementById('pf-tbody');
   if (!tbody) return;
@@ -4453,7 +4453,7 @@ function renderPortefeuille() {
             ${options}
           </select>
         </td>
-        <td class="pf-cote" style="color:var(--antichambre);font-size:15px">${cote} <span style="font-size:11px;color:#94a3b8">×${facteur}</span></td>
+        <td class="pf-cote" style="color:var(--ipo);font-size:15px">${cote} <span style="font-size:11px;color:#94a3b8">×${facteur}</span></td>
         <td style="white-space:nowrap">
           <button class="pf-edit" onclick="editBsFromPf('${b.id}')" title="Optimiser ce BS avec BScraft">✎</button>
           <button class="pf-remove" onclick="removeFromPortefeuille('${b.id}')" title="Retirer du portefeuille">×</button>
