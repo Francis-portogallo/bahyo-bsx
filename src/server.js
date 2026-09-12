@@ -1,7 +1,9 @@
 // src/server.js
-// @version 1.3.0
-// @date    2026-09-11
-// @change  1.3.0 — Ajout du routeur wallet (economie Talent) monte sur /wallet.
+// @version 1.4.0
+// @date    2026-09-12
+// @change  1.4.0 — Ajout du routeur webhook (GitHub auto-deploy) monte sur /github-deploy-hook.
+//                  Monte avant express.json() pour preserver le body brut (HMAC).
+//          1.3.0 — Ajout du routeur wallet (economie Talent) monte sur /wallet.
 //          1.2.0 — Ajout du routeur admin (superadmin) monte sur /admin.
 //          1.1.1 — CORS robuste : trim des origines + refus propre (au lieu de 500)
 //          1.1.0 — Unification frontend + BFF sur bsx.bahyo.net (meme origine)
@@ -25,6 +27,7 @@ import portfolioRoutes from './routes/portfolio.js';
 import iaRoutes        from './routes/ia.js';
 import adminRoutes     from './routes/admin.js';
 import walletRoutes    from './routes/wallet.js';
+import webhookRoutes   from './routes/webhook.js';
 import pool            from './db/pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,7 +36,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app     = express();
 const PORT    = process.env.PORT || 3001;
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 
 // ── Securite ─────────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -82,6 +85,9 @@ const authLimiter = rateLimit({
   max: 20,
   message: { error: 'Trop de tentatives d\'authentification.' },
 });
+
+// ── Webhook GitHub : monte AVANT express.json pour preserver le body brut ───
+app.use('/github-deploy-hook', webhookRoutes);
 
 // ── Middlewares ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
