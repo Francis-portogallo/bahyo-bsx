@@ -39,3 +39,5 @@ backups/
 
 # Marqueur deploy
 .deploy-date
+data/
+*.jsonl

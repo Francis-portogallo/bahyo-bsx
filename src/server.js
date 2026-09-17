@@ -1,7 +1,9 @@
 // src/server.js
-// @version 1.4.0
-// @date    2026-09-12
-// @change  1.4.0 — Ajout du routeur webhook (GitHub auto-deploy) monte sur /github-deploy-hook.
+// @version 1.5.0
+// @date    2026-09-17
+// @change  1.5.0 — Ajout du routeur atelier (annotation BS) monte sur /atelier.
+//                  Assistant Mistral via src/services/mistral.js.
+//          1.4.0 — Ajout du routeur webhook (GitHub auto-deploy) monte sur /github-deploy-hook.
 //                  Monte avant express.json() pour preserver le body brut (HMAC).
 //          1.3.0 — Ajout du routeur wallet (economie Talent) monte sur /wallet.
 //          1.2.0 — Ajout du routeur admin (superadmin) monte sur /admin.
@@ -28,6 +30,7 @@ import iaRoutes        from './routes/ia.js';
 import adminRoutes     from './routes/admin.js';
 import walletRoutes    from './routes/wallet.js';
 import webhookRoutes   from './routes/webhook.js';
+import atelierRoutes   from './routes/atelier.js';
 import pool            from './db/pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,7 +39,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app     = express();
 const PORT    = process.env.PORT || 3001;
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 
 // ── Securite ─────────────────────────────────────────────────────────────────
 app.use(helmet({
@@ -116,6 +119,7 @@ app.use('/portfolio', portfolioRoutes);
 app.use('/ia',        iaRoutes);
 app.use('/admin',     adminRoutes);
 app.use('/wallet',    walletRoutes);
+app.use('/atelier',   atelierRoutes);
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
