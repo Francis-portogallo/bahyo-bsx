@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier d'annotation — Bahyo</title>
+<!--
+     Atelier d'annotation BS — interface du couple annotateur-assistant (AA)
+     @version 1.0.0
+     @date    2026-09-17
+     Sert sur https://bsx.bahyo.net/atelier.html
+     API      /atelier/* (requireAuth + requireAnnotateur)
+     Assistant Mistral via src/services/mistral.js
+-->
+<style>
+:root{
+  --atelier:#4338ca; --atelier-lt:#eef2ff; --atelier-mid:#6366f1;
+  --constatif:#16a34a; --constatif-lt:#f0fdf4;
+  --declaratif:#dc2626; --declaratif-lt:#fef2f2;
+  --orphelin:#d97706; --orphelin-lt:#fffbeb;
+  --porte:#16a34a; --latent:#d97706; --atomise:#64748b;
+  --ink:#0f172a; --ink2:#334155; --mut:#64748b; --mut2:#94a3b8;
+  --line:#e2e8f0; --bg:#f8fafc; --card:#fff;
+}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+     color:var(--ink);background:var(--bg)}
+button{font:inherit;cursor:pointer;border:0;border-radius:7px;padding:7px 13px;transition:.15s}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font:inherit;padding:7px 10px;border:1px solid var(--line);
+     border-radius:7px;width:100%;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--atelier-mid);outline-offset:-1px;border-color:transparent}
+textarea{resize:vertical;min-height:62px}
+a{color:var(--atelier);text-decoration:none}
+.btn{background:var(--atelier);color:#fff;font-weight:600}
+.btn:hover:not(:disabled){background:var(--atelier-mid)}
+.btn-2{background:#fff;color:var(--ink2);border:1px solid var(--line)}
+.btn-2:hover:not(:disabled){background:var(--bg);border-color:var(--mut2)}
+.btn-ia{background:linear-gradient(135deg,var(--atelier),var(--atelier-mid));color:#fff;font-weight:600}
+.btn-ok{background:var(--constatif);color:#fff;font-weight:600}
+.btn-sm{padding:4px 9px;font-size:12px}
+.muted{color:var(--mut)}
+.small{font-size:12px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+
+/* ── Header ── */
+header{background:var(--ink);color:#fff;padding:0 18px;display:flex;align-items:center;
+       gap:20px;height:52px;position:sticky;top:0;z-index:50}
+.logo{font-weight:800;font-size:16px;letter-spacing:-.3px}
+.logo span{color:var(--atelier-mid)}
+nav{display:flex;gap:3px;margin-left:8px}
+nav button{background:transparent;color:#cbd5e1;font-size:13px;padding:6px 12px;border-radius:6px}
+nav button:hover{background:rgba(255,255,255,.08);color:#fff}
+nav button.on{background:var(--atelier);color:#fff;font-weight:600}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cbd5e1}
+
+/* ── Layout ── */
+.wrap{max-width:1560px;margin:0 auto;padding:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px}
+.view{display:none}
+.view.on{display:block}
+h1{font-size:21px;margin:0 0 4px}
+h2{font-size:15px;margin:0 0 10px}
+h3{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+
+/* ── Login ── */
+#v-login{max-width:380px;margin:9vh auto}
+#v-login .card{padding:26px}
+
+/* ── Liste ── */
+.filtres{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.filtres select,.filtres input{width:auto;min-width:150px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;color:var(--mut);font-size:11px;text-transform:uppercase;
+   letter-spacing:.4px;border-bottom:2px solid var(--line);font-weight:700}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--atelier-lt)}
+
+/* ── Badges ── */
+.b{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;
+   white-space:nowrap;line-height:1.5}
+.b-constatif{background:var(--constatif-lt);color:var(--constatif)}
+.b-declaratif{background:var(--declaratif-lt);color:var(--declaratif)}
+.b-orphelin{background:var(--orphelin-lt);color:var(--orphelin)}
+.b-porte{background:var(--constatif-lt);color:var(--porte)}
+.b-latent{background:var(--orphelin-lt);color:var(--latent)}
+.b-atomise{background:#f1f5f9;color:var(--atomise)}
+.b-n{background:var(--atelier-lt);color:var(--atelier)}
+.b-g{background:#f1f5f9;color:var(--mut)}
+.b-riche{background:#fce7f3;color:#be185d}
+.b-avec_tiers_seul{background:#dbeafe;color:#1d4ed8}
+.b-sans_seme{background:#f1f5f9;color:var(--mut)}
+
+/* ── Annotation : 3 colonnes ── */
+.annot-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.annot-head .meta{flex:1}
+.cols{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:14px;align-items:start}
+@media(max-width:1200px){.cols{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:14px}
+.src{white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--ink2);
+     max-height:420px;overflow:auto;background:var(--bg);padding:12px;border-radius:8px}
+
+/* Noyaux */
+.noyau{padding:9px 11px;border:1px solid var(--line);border-radius:8px;cursor:pointer;
+       margin-bottom:6px;font-size:13px;display:flex;gap:9px;align-items:flex-start;background:#fff}
+.noyau:hover{border-color:var(--atelier-mid);background:var(--atelier-lt)}
+.noyau.on{border-color:var(--atelier);background:var(--atelier-lt);box-shadow:0 0 0 1px var(--atelier)}
+.noyau .txt{flex:1}
+.noyau .st{display:flex;gap:3px;flex-shrink:0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block;margin-top:5px}
+.dot.f{background:var(--constatif)}
+.dot.d{background:var(--declaratif)}
+.dot.o{background:var(--orphelin)}
+
+/* Formulaire annotation */
+.places{display:flex;gap:4px;margin-bottom:12px}
+.places button{flex:1;background:var(--bg);color:var(--mut);border:1px solid var(--line);font-weight:600}
+.places button.on{background:var(--atelier);color:#fff;border-color:var(--atelier)}
+.fld{margin-bottom:11px}
+.fld label{display:block;font-size:11px;font-weight:700;color:var(--mut);
+           text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.row{display:flex;gap:9px}
+.row>*{flex:1}
+.chk{display:flex;align-items:center;gap:7px;font-size:13px}
+.chk input{width:auto}
+
+/* Proposition assistant */
+.prop{background:var(--atelier-lt);border-left:3px solid var(--atelier);padding:11px;
+      border-radius:0 8px 8px 0;margin-bottom:11px;font-size:13px}
+.prop .t{font-weight:700;color:var(--atelier);font-size:11px;text-transform:uppercase;
+         letter-spacing:.4px;margin-bottom:5px}
+.ecart{background:var(--orphelin-lt);border-left:3px solid var(--orphelin);padding:11px;
+       border-radius:0 8px 8px 0;margin-bottom:11px}
+
+/* Dialogue */
+.chat{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:9px;margin-bottom:10px}
+.msg{padding:9px 11px;border-radius:9px;font-size:13px;line-height:1.6;white-space:pre-wrap}
+.msg.a{background:var(--bg);border:1px solid var(--line)}
+.msg.u{background:var(--atelier);color:#fff;align-self:flex-end;max-width:85%}
+.msg .who{font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.65;
+          font-weight:700;margin-bottom:3px}
+
+/* Manques */
+.manque{background:var(--orphelin-lt);border:1px solid #fde68a;border-radius:8px;
+        padding:9px 11px;margin-bottom:7px;font-size:12.5px}
+.manque .tm{font-weight:700;color:var(--orphelin)}
+.manque .q{font-style:italic;color:var(--ink2);margin-top:4px}
+
+/* Groupes */
+.groupe{border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:10px}
+.groupe.assistant{border-left:3px solid var(--atelier-mid)}
+.groupe .gh{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;margin-bottom:7px}
+.groupe .gn{font-size:12px;color:var(--ink2);margin:6px 0}
+.groupe .gn li{margin:2px 0}
+
+/* Divers */
+.empty{text-align:center;padding:36px 16px;color:var(--mut2)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);
+       color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;z-index:200;
+       box-shadow:0 8px 26px rgba(0,0,0,.28);max-width:80vw}
+.toast.err{background:var(--declaratif)}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:11px}
+.stat .s{background:var(--bg);border-left:3px solid var(--atelier);border-radius:0 8px 8px 0;padding:11px}
+.stat .s .v{font-size:23px;font-weight:800;color:var(--atelier)}
+.stat .s .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+details summary{cursor:pointer;font-size:12px;color:var(--mut);padding:4px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Bah<span>yo</span> · Atelier</div>
+  <nav id="nav" style="display:none">
+    <button data-v="liste"  class="on">Expériences</button>
+    <button data-v="manuel">Manuel vivant</button>
+    <button data-v="stats">Tableau de bord</button>
+  </nav>
+  <div class="hdr-right">
+    <span id="who"></span>
+    <button id="btn-out" class="btn-2 btn-sm" style="display:none">Quitter</button>
+  </div>
+</header>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div class="view on" id="v-login">
+  <div class="card">
+    <h1>Atelier d'annotation</h1>
+    <p class="muted small" style="margin:0 0 18px">
+      Accès réservé aux annotateurs. Identifiez-vous avec votre compte Bahyo.
+    </p>
+    <div class="fld"><label>Email</label><input id="li-mail" type="email" autocomplete="username"></div>
+    <div class="fld"><label>Mot de passe</label><input id="li-pwd" type="password" autocomplete="current-password"></div>
+    <button class="btn" id="btn-in" style="width:100%;margin-top:6px">Entrer dans l'atelier</button>
+    <div id="li-err" class="small" style="color:var(--declaratif);margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ══════════ LISTE ══════════ -->
+<div class="view" id="v-liste">
+  <div class="wrap">
+    <h1>Expériences à qualifier</h1>
+    <p class="muted small" style="margin:0 0 16px">
+      Chaque expérience porte un texte source et les noyaux qu'en a extraits le découpeur.
+      L'annotation se fait noyau par noyau, place par place du formalisme 3A.
+    </p>
+    <div class="card">
+      <div class="filtres">
+        <select id="f-corpus"><option value="">Tous les corpus</option></select>
+        <select id="f-cat">
+          <option value="">Toutes catégories</option>
+          <option value="riche">riche</option>
+          <option value="avec_tiers_seul">avec_tiers_seul</option>
+          <option value="sans_seme">sans_seme</option>
+        </select>
+        <select id="f-statut">
+          <option value="tous">Tous statuts</option>
+          <option value="vierge">Non commencées</option>
+          <option value="en_cours">En cours</option>
+          <option value="complet">Complètes</option>
+        </select>
+        <button class="btn-2 btn-sm" onclick="chargerListe()">Actualiser</button>
+        <span class="muted small" id="liste-n" style="margin-left:auto"></span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Profil</th><th>Poste</th><th>Secteur</th><th>Cat.</th>
+          <th>Sèmes</th><th>Noyaux</th><th>Annot.</th><th>Groupes</th><th>Extrait</th>
+        </tr></thead>
+        <tbody id="tb-liste"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ANNOTATION ══════════ -->
+<div class="view" id="v-annot">
+  <div class="wrap">
+    <div class="annot-head">
+      <button class="btn-2 btn-sm" onclick="show('liste')">← Expériences</button>
+      <div class="meta">
+        <h1 id="a-poste">—</h1>
+        <div class="muted small" id="a-meta">—</div>
+      </div>
+      <button class="btn-ia btn-sm" id="btn-a3" onclick="lancerA3()">Passage A₃ (assistant)</button>
+    </div>
+
+    <div class="cols">
+      <!-- COLONNE 1 : source + groupes -->
+      <div class="col">
+        <div class="card">
+          <h3>Texte source</h3>
+          <div class="src" id="a-src"></div>
+        </div>
+        <div class="card">
+          <h3>Groupes A₃ <span class="muted" id="g-n"></span></h3>
+          <div id="a-groupes"><div class="empty small">Aucun groupe. Lancez le passage A₃.</div></div>
+        </div>
+      </div>
+
+      <!-- COLONNE 2 : noyaux + formulaire -->
+      <div class="col">
+        <div class="card">
+          <h3>Noyaux <span class="muted" id="n-n"></span></h3>
+          <div id="a-noyaux"></div>
+        </div>
+        <div class="card" id="form-card" style="display:none">
+          <h3>Annotation</h3>
+          <div class="mono" style="background:var(--bg);padding:9px;border-radius:7px;margin-bottom:12px" id="f-noyau"></div>
+          <div class="places">
+            <button data-p="A1" class="on" onclick="setPlace('A1')">A₁ · aptitude</button>
+            <button data-p="A2" onclick="setPlace('A2')">A₂ · acte</button>
+            <button data-p="A3" onclick="setPlace('A3')">A₃ · attestation</button>
+          </div>
+
+          <div id="f-prop"></div>
+
+          <div class="fld">
+            <label>Régime d'énonciation</label>
+            <select id="f-regime" onchange="onRegime()">
+              <option value="">— non qualifié —</option>
+              <option value="constatif">constatif</option>
+              <option value="declaratif">déclaratif</option>
+              <option value="orphelin">orphelin</option>
+            </select>
+          </div>
+          <div class="fld" id="fld-souscat" style="display:none">
+            <label>Sous-catégorie du déclaratif</label>
+            <select id="f-souscat">
+              <option value="">—</option>
+              <option value="fonctionnel">fonctionnel (locution de gestion)</option>
+              <option value="relationnel">relationnel (qualité interpersonnelle)</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label>Identification <span class="muted" style="text-transform:none">— nom du procédé reconnu</span></label>
+            <input id="f-ident" placeholder="Kanban, ISO 9001, développement Prolog…">
+          </div>
+          <div class="fld">
+            <label class="chk"><input type="checkbox" id="f-compo"> Aptitude naïve — candidate à composition</label>
+          </div>
+          <div class="fld">
+            <label>Commentaire libre</label>
+            <textarea id="f-com" placeholder="Ce que les champs structurés ne capturent pas…"></textarea>
+          </div>
+
+          <div id="f-ecart"></div>
+
+          <div class="row" style="margin-top:14px">
+            <button class="btn-ia" id="btn-prop" onclick="demanderProposition()">Proposition assistant</button>
+            <button class="btn-2" onclick="sauver('brouillon')">Brouillon</button>
+            <button class="btn-ok" onclick="sauver('valide')">Valider</button>
+          </div>
+          <div class="small muted" style="margin-top:8px;text-align:center">
+            <a onclick="sauver('litigieux')" style="cursor:pointer">marquer litigieux</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLONNE 3 : assistant + manques + cas similaires -->
+      <div class="col">
+        <div class="card">
+          <h3>Dialogue assistant</h3>
+          <div class="chat" id="a-chat"><div class="empty small">Sélectionnez un noyau pour dialoguer.</div></div>
+          <textarea id="a-msg" placeholder="Poser une question sur ce noyau…" rows="2"></textarea>
+          <button class="btn" id="btn-msg" onclick="envoyer()" style="width:100%;margin-top:7px">Envoyer</button>
+        </div>
+
+        <div class="card">
+          <h3>Manques identifiés <span class="muted" id="m-n"></span></h3>
+          <div id="a-manques"></div>
+          <details style="margin-top:9px">
+            <summary>+ Signaler un manque</summary>
+            <div style="margin-top:9px">
+              <div class="fld">
+                <label>Type</label>
+                <select id="m-type"></select>
+              </div>
+              <div class="fld"><label>Ce qui manque</label>
+                <textarea id="m-desc" rows="2" placeholder="Le tiers attestataire n'est pas nommé…"></textarea></div>
+              <div class="fld"><label>Question que BioCraft devrait poser</label>
+                <textarea id="m-quest" rows="2" placeholder="Pour quelle entreprise ou quel client cette mission a-t-elle été menée ?"></textarea></div>
+              <div class="fld"><label>Criticité</label>
+                <select id="m-crit">
+                  <option value="souhaitable">souhaitable</option>
+                  <option value="bloquant">bloquant</option>
+                </select></div>
+              <button class="btn btn-sm" onclick="ajouterManque()" style="width:100%">Enregistrer le manque</button>
+            </div>
+          </details>
+        </div>
+
+        <div class="card">
+          <h3>Cas similaires</h3>
+          <div id="a-simil"><div class="empty small">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MANUEL ══════════ -->
+<div class="view" id="v-manuel">
+  <div class="wrap" style="max-width:840px">
+    <h1>Manuel vivant</h1>
+    <p class="muted small" style="margin:0 0 16px">
+      La doctrine de l'atelier. Chaque évolution porte son quoi, son où et son pourquoi.
+    </p>
+    <div id="man-liste"></div>
+  </div>
+</div>
+
+<!-- ══════════ STATS ══════════ -->
+<div class="view" id="v-stats">
+  <div class="wrap">
+    <h1>Tableau de bord</h1>
+    <div class="card" style="margin-bottom:14px"><div class="stat" id="st-global"></div></div>
+    <div class="cols" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="card"><h3>Régimes par place</h3><div id="st-regime"></div></div>
+      <div class="card"><h3>Potentiel performatif</h3><div id="st-perf"></div></div>
+      <div class="card"><h3>Manques les plus fréquents</h3><div id="st-manq"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  ÉTAT
+// ═══════════════════════════════════════════════════════════════════════════
+const S = {
+  token: sessionStorage.getItem('atelier_tk') || null,
+  email: sessionStorage.getItem('atelier_em') || null,
+  ref: null,          // référentiel
+  exp: null,          // expérience courante
+  noyaux: [],
+  noyauId: null,
+  place: 'A1',
+  proposition: null,  // proposition assistant pour le couple (noyau, place) courant
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  UTILITAIRES
+// ═══════════════════════════════════════════════════════════════════════════
+const $  = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, err) {
+  const d = document.createElement('div');
+  d.className = 'toast' + (err ? ' err' : '');
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), err ? 6000 : 3200);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + S.token,
+      ...(opts.headers || {}),
+    },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) { btn.dataset.lbl = btn.innerHTML; btn.innerHTML = '<span class="spin"></span> ' + (label || ''); btn.disabled = true; }
+  else { btn.innerHTML = btn.dataset.lbl || label || ''; btn.disabled = false; }
+}
+
+function show(v) {
+  document.querySelectorAll('.view').forEach(e => e.classList.remove('on'));
+  $('v-' + v).classList.add('on');
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'stats')  chargerStats();
+  if (v === 'manuel') chargerManuel();
+  if (v === 'liste')  chargerListe();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AUTHENTIFICATION
+// ═══════════════════════════════════════════════════════════════════════════
+$('btn-in').onclick = async () => {
+  const b = $('btn-in'); $('li-err').textContent = '';
+  busy(b, true, 'Connexion…');
+  try {
+    const r = await fetch('/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('li-mail').value.trim(), password: $('li-pwd').value }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Identifiants refusés');
+    S.token = d.accessToken; S.email = d.user?.email || $('li-mail').value.trim();
+    sessionStorage.setItem('atelier_tk', S.token);
+    sessionStorage.setItem('atelier_em', S.email);
+    await entrer();
+  } catch (e) {
+    $('li-err').textContent = e.message;
+  } finally { busy(b, false, "Entrer dans l'atelier"); }
+};
+
+$('li-pwd').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-in').click(); });
+
+$('btn-out').onclick = () => {
+  sessionStorage.removeItem('atelier_tk'); sessionStorage.removeItem('atelier_em');
+  location.reload();
+};
+
+async function entrer() {
+  try {
+    S.ref = await api('/atelier/referentiel');
+  } catch (e) {
+    $('li-err').textContent = e.message.includes('annotateur')
+      ? "Ce compte n'a pas le rôle annotateur."
+      : e.message;
+    S.token = null; sessionStorage.removeItem('atelier_tk');
+    return;
+  }
+  $('nav').style.display = 'flex';
+  $('btn-out').style.display = 'inline-block';
+  $('who').textContent = S.email || '';
+  $('m-type').innerHTML = S.ref.types_manque
+    .map(t => `<option value="${t.code}">${esc(t.label)}</option>`).join('');
+  show('liste');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  LISTE DES EXPÉRIENCES
+// ═══════════════════════════════════════════════════════════════════════════
+async function chargerCorpus() {
+  try {
+    const d = await api('/atelier/corpus');
+    $('f-corpus').innerHTML = '<option value="">Tous les corpus</option>' +
+      d.corpus.map(c => `<option value="${c.id}">${esc(c.nom)} (${c.nb_experiences} exp.)</option>`).join('');
+  } catch { /* silencieux */ }
+}
+
+async function chargerListe() {
+  const q = new URLSearchParams();
+  if ($('f-corpus').value) q.set('corpus_id', $('f-corpus').value);
+  if ($('f-cat').value)    q.set('categorie', $('f-cat').value);
+  q.set('statut', $('f-statut').value || 'tous');
+  q.set('limit', '200');
+
+  try {
+    const d = await api('/atelier/experiences?' + q);
+    $('liste-n').textContent = `${d.experiences.length} expérience(s)`;
+    $('tb-liste').innerHTML = d.experiences.length ? d.experiences.map(e => {
+      const s = e.semes_detectes || {};
+      const semes = [s.tiers && 'tiers', s.chiffre && 'chiffre', s.sigle && 'sigle']
+        .filter(Boolean).map(x => `<span class="b b-n">${x}</span>`).join(' ') || '<span class="muted">—</span>';
+      const nb = +e.nb_noyaux, na = +e.nb_annotations;
+      const pct = nb ? Math.round(na / (nb * 3) * 100) : 0;
+      return `<tr onclick="ouvrir('${e.id}')">
+        <td class="mono">${esc(e.profil_ref)}</td>
+        <td><strong>${esc(e.poste || '—')}</strong></td>
+        <td class="small muted">${esc(e.secteur || '—')}</td>
+        <td><span class="b b-${esc(e.categorie)}">${esc(e.categorie || '—')}</span></td>
+        <td>${semes}</td>
+        <td><strong>${nb}</strong></td>
+        <td>${na} <span class="muted small">(${pct}%)</span></td>
+        <td>${e.nb_groupes}</td>
+        <td class="small muted">${esc((e.extrait || '').slice(0, 90))}…</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="9" class="empty">Aucune expérience.</td></tr>';
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  OUVERTURE D'UNE EXPÉRIENCE
+// ═══════════════════════════════════════════════════════════════════════════
+async function ouvrir(id) {
+  try {
+    const d = await api('/atelier/experiences/' + id);
+    S.exp = d.experience; S.noyaux = d.noyaux; S.noyauId = null; S.proposition = null;
+
+    $('a-poste').textContent = S.exp.poste || 'Sans poste';
+    const s = S.exp.semes_detectes || {};
+    const ner = (s.tiers_nommes_ner || []).join(', ');
+    $('a-meta').innerHTML = `profil <span class="mono">${esc(S.exp.profil_ref)}</span> · ${esc(S.exp.secteur || '—')}
+      · <span class="b b-${esc(S.exp.categorie)}">${esc(S.exp.categorie)}</span>
+      ${ner ? ` · tiers détectés : <strong>${esc(ner)}</strong>` : ''}`;
+    $('a-src').textContent = S.exp.texte_source || '(texte source vide)';
+    $('btn-a3').disabled = !S.exp.texte_source?.trim();
+
+    renderNoyaux();
+    renderGroupes(d.groupes);
+    renderManques(d.manques);
+    $('form-card').style.display = 'none';
+    $('a-chat').innerHTML = '<div class="empty small">Sélectionnez un noyau pour dialoguer.</div>';
+    $('a-simil').innerHTML = '<div class="empty small">—</div>';
+    show('annot');
+  } catch (e) { toast(e.message, true); }
+}
+
+function renderNoyaux() {
+  $('n-n').textContent = `(${S.noyaux.length})`;
+  $('a-noyaux').innerHTML = S.noyaux.map(n => {
+    const dots = ['A1','A2','A3'].map(p => {
+      const a = (n.annotations || []).find(x => x.place === p);
+      const c = !a || !a.regime ? '' :
+        a.regime === 'constatif' ? 'f' : a.regime === 'declaratif' ? 'd' : 'o';
+      return `<span class="dot ${c}" title="${p}${a?.regime ? ' : ' + a.regime : ''}"></span>`;
+    }).join('');
+    return `<div class="noyau ${n.id === S.noyauId ? 'on' : ''}" onclick="selNoyau('${n.id}')">
+      <div class="txt">${esc(n.texte)}</div><div class="st">${dots}</div></div>`;
+  }).join('');
+}
+
+function renderGroupes(groupes) {
+  $('g-n').textContent = groupes.length ? `(${groupes.length})` : '';
+  $('a-groupes').innerHTML = groupes.length ? groupes.map(g => {
+    const noy = (g.noyau_ids || []).map(id => S.noyaux.find(n => n.id === id)?.texte).filter(Boolean);
+    return `<div class="groupe ${esc(g.origine)}">
+      <div class="gh">
+        <div><strong>${esc(g.tiers || '—')}</strong>
+          <span class="b b-g">${esc(g.tiers_source || '?')}</span></div>
+        <span class="b b-${esc(g.potentiel_performatif || 'atomise')}">${esc(g.potentiel_performatif || '—')}</span>
+      </div>
+      ${g.finalite_exprimee ? `<div class="small muted">finalité : ${esc(g.finalite_exprimee)}</div>` : ''}
+      <ul class="gn">${noy.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+      <div class="row">
+        <input class="small" placeholder="Libellé du BS reconstitué…"
+               value="${esc(g.libelle || '')}" id="gl-${g.id}">
+        <button class="btn-2 btn-sm" style="flex:0 0 auto" onclick="majGroupe('${g.id}')">Enregistrer</button>
+      </div>
+      <div class="small muted" style="margin-top:5px">
+        ${esc(g.origine)} · ${esc(g.statut)}
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty small">Aucun groupe. Lancez le passage A₃.</div>';
+}
+
+function renderManques(manques) {
+  const liste = S.noyauId ? manques.filter(m => m.noyau_id === S.noyauId || !m.noyau_id) : manques;
+  $('m-n').textContent = liste.length ? `(${liste.length})` : '';
+  S._manques = manques;
+  $('a-manques').innerHTML = liste.length ? liste.map(m => `
+    <div class="manque">
+      <div><span class="tm">${esc(m.type_manque)}</span>
+        ${m.criticite === 'bloquant' ? '<span class="b b-declaratif">bloquant</span>' : ''}
+        <a class="small" style="float:right;cursor:pointer" onclick="suppManque('${m.id}')">×</a></div>
+      <div>${esc(m.description)}</div>
+      ${m.question_type ? `<div class="q">« ${esc(m.question_type)} »</div>` : ''}
+    </div>`).join('') : '<div class="empty small">Aucun manque signalé.</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SÉLECTION D'UN NOYAU / PLACE
+// ═══════════════════════════════════════════════════════════════════════════
+function selNoyau(id) {
+  S.noyauId = id; S.proposition = null;
+  const n = S.noyaux.find(x => x.id === id);
+  $('f-noyau').textContent = n.texte;
+  $('form-card').style.display = 'block';
+  renderNoyaux();
+  renderManques(S._manques || []);
+  setPlace(S.place);
+  chargerChat();
+}
+
+function setPlace(p) {
+  S.place = p; S.proposition = null;
+  document.querySelectorAll('.places button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+  $('btn-prop').style.display = p === 'A1' ? 'block' : 'none';
+  $('f-prop').innerHTML = ''; $('f-ecart').innerHTML = '';
+
+  const n = S.noyaux.find(x => x.id === S.noyauId);
+  const a = (n?.annotations || []).find(x => x.place === p);
+  $('f-regime').value  = a?.regime || '';
+  $('f-souscat').value = a?.sous_categorie || '';
+  $('f-ident').value   = a?.identification || '';
+  $('f-compo').checked = !!a?.a_composer;
+  $('f-com').value     = a?.commentaire || '';
+  if (a?.proposition_assistant) { S.proposition = a.proposition_assistant; afficherProp(); }
+  onRegime();
+}
+
+function onRegime() {
+  $('fld-souscat').style.display = $('f-regime').value === 'declaratif' ? 'block' : 'none';
+  verifierEcart();
+}
+$('f-ident').addEventListener('input',  verifierEcart);
+$('f-compo').addEventListener('change', verifierEcart);
+$('f-souscat').addEventListener('change', verifierEcart);
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PROPOSITION DE L'ASSISTANT
+// ═══════════════════════════════════════════════════════════════════════════
+async function demanderProposition() {
+  const b = $('btn-prop'); busy(b, true, 'Analyse…');
+  try {
+    const d = await api(`/atelier/noyaux/${S.noyauId}/proposition-a1`, { method: 'POST' });
+    if (d.statut !== 'ok' || !d.proposition) {
+      toast("L'assistant n'a pas produit de JSON exploitable", true);
+      return;
+    }
+    S.proposition = d.proposition;
+    afficherProp();
+
+    // Pré-remplit si les champs sont vides
+    if (!$('f-regime').value) $('f-regime').value = d.proposition.regime || '';
+    if (!$('f-ident').value)  $('f-ident').value  = d.proposition.identification || '';
+    if (!$('f-souscat').value) $('f-souscat').value = d.proposition.sous_categorie || '';
+    if (d.proposition.a_composer) $('f-compo').checked = true;
+    onRegime();
+
+    // Cas similaires
+    $('a-simil').innerHTML = (d.cas_similaires || []).length
+      ? d.cas_similaires.map(c => `<div class="manque" style="background:var(--bg);border-color:var(--line)">
+          <div class="small">${esc(c.texte)}</div>
+          <div class="small"><span class="b b-${esc(c.regime)}">${esc(c.regime)}</span>
+            ${c.identification ? ' ' + esc(c.identification) : ''}</div></div>`).join('')
+      : '<div class="empty small">Aucun précédent comparable.</div>';
+  } catch (e) { toast(e.message, true); }
+  finally { busy(b, false, 'Proposition assistant'); }
+}
+
+function afficherProp() {
+  const p = S.proposition; if (!p) return;
+  $('f-prop').innerHTML = `<div class="prop">
+    <div class="t">Proposition de l'assistant · confiance ${esc(p.confiance || '?')}</div>
+    <div><span class="b b-${esc(p.regime)}">${esc(p.regime)}</span>
+      ${p.sous_categorie ? ` <span class="b b-g">${esc(p.sous_categorie)}</span>` : ''}
+      ${p.identification ? ` <strong>${esc(p.identification)}</strong>` : ''}
+      ${p.a_composer ? ' <span class="b b-n">à composer</span>' : ''}</div>
+    <div class="small" style="margin-top:5px;color:var(--ink2)">${esc(p.justification || '')}</div>
+    ${(p.manques || []).length ? `<details style="margin-top:7px">
+      <summary>${p.manques.length} manque(s) détecté(s) — cliquer pour ajouter</summary>
+      ${p.manques.map((m, i) => `<div class="manque" style="margin-top:6px">
+        <div><span class="tm">${esc(m.type_manque)}</span>
+          <button class="btn-2 btn-sm" style="float:right" onclick="adopterManque(${i})">+ retenir</button></div>
+        <div>${esc(m.description)}</div>
+        ${m.question_type ? `<div class="q">« ${esc(m.question_type)} »</div>` : ''}
+      </div>`).join('')}
+    </details>` : ''}
+  </div>`;
+  verifierEcart();
+}
+
+function verifierEcart() {
+  const p = S.proposition;
+  if (!p) { $('f-ecart').innerHTML = ''; return; }
+  const diff = ($('f-regime').value && $('f-regime').value !== p.regime)
+            || ($('f-ident').value.trim() !== (p.identification || '').trim());
+  if (!diff) { $('f-ecart').innerHTML = ''; return; }
+  if ($('f-ecart-txt')) return;   // deja affiche : ne pas ecraser la saisie en cours
+  $('f-ecart').innerHTML = `<div class="ecart">
+    <div class="t small" style="font-weight:700;color:var(--orphelin);text-transform:uppercase;
+         letter-spacing:.4px;margin-bottom:5px">Écart avec l'assistant</div>
+    <div class="small muted" style="margin-bottom:6px">
+      Vous décidez autrement. Expliciter pourquoi — cette explication devient
+      un matériau d'évolution de la doctrine.</div>
+    <textarea id="f-ecart-txt" rows="2" placeholder="Pourquoi cette qualification plutôt que celle proposée…"></textarea>
+  </div>`;
+}
+
+function adopterManque(i) {
+  const m = S.proposition?.manques?.[i]; if (!m) return;
+  $('m-type').value  = m.type_manque;
+  $('m-desc').value  = m.description || '';
+  $('m-quest').value = m.question_type || '';
+  $('m-crit').value  = m.criticite || 'souhaitable';
+  ajouterManque('assistant');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SAUVEGARDE D'UNE ANNOTATION
+// ═══════════════════════════════════════════════════════════════════════════
+async function sauver(statut) {
+  if (!S.noyauId) return;
+  const p = S.proposition;
+  const ecart = !!p && (
+    ($('f-regime').value && $('f-regime').value !== p.regime) ||
+    ($('f-ident').value.trim() !== (p.identification || '').trim())
+  );
+  const expl = $('f-ecart-txt')?.value?.trim() || null;
+  if (ecart && (!expl || expl.length < 10)) {
+    toast("Expliciter l'écart avec l'assistant (10 caractères minimum)", true);
+    $('f-ecart-txt')?.focus();
+    return;
+  }
+
+  try {
+    await api(`/atelier/noyaux/${S.noyauId}/annotation`, {
+      method: 'POST',
+      body: JSON.stringify({
+        place: S.place,
+        regime: $('f-regime').value || null,
+        sous_categorie: $('f-souscat').value || null,
+        identification: $('f-ident').value.trim() || null,
+        a_composer: $('f-compo').checked,
+        commentaire: $('f-com').value.trim() || null,
+        proposition_assistant: p || null,
+        ecart_assistant: ecart,
+        ecart_explication: expl,
+        statut,
+      }),
+    });
+    // Rafraîchit l'état local du noyau
+    const n = S.noyaux.find(x => x.id === S.noyauId);
+    n.annotations = (n.annotations || []).filter(a => a.place !== S.place);
+    n.annotations.push({
+      place: S.place, regime: $('f-regime').value, statut,
+      sous_categorie: $('f-souscat').value, identification: $('f-ident').value,
+      a_composer: $('f-compo').checked, commentaire: $('f-com').value,
+      proposition_assistant: p,
+    });
+    renderNoyaux();
+    toast(statut === 'valide' ? `${S.place} validé` : `${S.place} enregistré (${statut})`);
+
+    // Enchaîne vers la place suivante
+    if (statut === 'valide') {
+      const suite = { A1: 'A2', A2: 'A3', A3: null }[S.place];
+      if (suite) setPlace(suite);
+    }
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MANQUES
+// ═══════════════════════════════════════════════════════════════════════════
+async function ajouterManque(detecte_par = 'annotateur') {
+  const desc = $('m-desc').value.trim();
+  if (!desc) { toast('Décrivez ce qui manque', true); return; }
+  try {
+    await api('/atelier/manques', {
+      method: 'POST',
+      body: JSON.stringify({
+        noyau_id: S.noyauId || null,
+        experience_id: S.noyauId ? null : S.exp.id,
+        place: S.place,
+        type_manque: $('m-type').value,
+        description: desc,
+        question_type: $('m-quest').value.trim() || null,
+        criticite: $('m-crit').value,
+        detecte_par,
+      }),
+    });
+    $('m-desc').value = ''; $('m-quest').value = '';
+    const d = await api('/atelier/experiences/' + S.exp.id);
+    renderManques(d.manques);
+    toast('Manque enregistré');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function suppManque(id) {
+  try {
+    await api('/atelier/manques/' + id, { method: 'DELETE' });
+    const d = await api('/atelier/experiences/' + S.exp.id);
+    renderManques(d.manques);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GROUPES A₃
+// ═══════════════════════════════════════════════════════════════════════════
+async function lancerA3() {
+  const b = $('btn-a3'); busy(b, true, 'Passage A₃…');
+  try {
+    const d = await api(`/atelier/experiences/${S.exp.id}/passage-a3`, {
+      method: 'POST', body: JSON.stringify({ creer_groupes: true }),
+    });
+    const full = await api('/atelier/experiences/' + S.exp.id);
+    renderGroupes(full.groupes);
+    toast(`${d.groupes.length} groupe(s) proposé(s) en ${d.passage.duree_s}s`);
+  } catch (e) { toast(e.message, true); }
+  finally { busy(b, false, 'Passage A₃ (assistant)'); }
+}
+
+async function majGroupe(id) {
+  try {
+    await api('/atelier/groupes/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify({ libelle: $('gl-' + id).value.trim() || null, statut: 'valide' }),
+    });
+    toast('Groupe enregistré');
+    const d = await api('/atelier/experiences/' + S.exp.id);
+    renderGroupes(d.groupes);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DIALOGUE
+// ═══════════════════════════════════════════════════════════════════════════
+async function chargerChat() {
+  try {
+    const d = await api('/atelier/messages?noyau_id=' + S.noyauId);
+    renderChat(d.messages);
+  } catch { /* silencieux */ }
+}
+
+function renderChat(msgs) {
+  const c = $('a-chat');
+  c.innerHTML = msgs.length ? msgs.map(m => `
+    <div class="msg ${m.role === 'assistant' ? 'a' : 'u'}">
+      <div class="who">${m.role === 'assistant' ? 'assistant' : 'vous'}</div>
+      ${esc(m.contenu)}</div>`).join('')
+    : '<div class="empty small">Aucun échange sur ce noyau.</div>';
+  c.scrollTop = c.scrollHeight;
+}
+
+async function envoyer() {
+  const msg = $('a-msg').value.trim();
+  if (!msg || !S.noyauId) { toast('Sélectionnez un noyau et écrivez un message', true); return; }
+  const b = $('btn-msg'); busy(b, true, 'Réflexion…');
+  $('a-msg').value = '';
+  try {
+    await api('/atelier/dialogue', {
+      method: 'POST',
+      body: JSON.stringify({
+        noyau_id: S.noyauId, experience_id: S.exp.id, place: S.place, message: msg,
+      }),
+    });
+    await chargerChat();
+  } catch (e) { toast(e.message, true); }
+  finally { busy(b, false, 'Envoyer'); }
+}
+
+$('a-msg').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) envoyer();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MANUEL
+// ═══════════════════════════════════════════════════════════════════════════
+async function chargerManuel() {
+  try {
+    const d = await api('/atelier/manuel');
+    $('man-liste').innerHTML = d.sections.length ? d.sections.map(s => `
+      <div class="card" style="margin-bottom:12px">
+        <h2>${esc(s.titre)}</h2>
+        <div style="white-space:pre-wrap;color:var(--ink2)">${esc(s.contenu_md)}</div>
+        ${s.dernier_quoi ? `<details style="margin-top:10px">
+          <summary>Dernière évolution</summary>
+          <div class="small" style="margin-top:6px">
+            <strong>Quoi</strong> — ${esc(s.dernier_quoi)}<br>
+            <strong>Où</strong> — ${esc(s.dernier_ou)}<br>
+            <strong>Pourquoi</strong> — ${esc(s.dernier_pourquoi)}
+          </div></details>` : ''}
+      </div>`).join('')
+      : `<div class="card empty">Le manuel est vide. Les sections doctrinales
+         (régimes d'énonciation, aptitudes éligibles, agglomération par A₃…)
+         restent à rédiger.</div>`;
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════════════════════════════════
+async function chargerStats() {
+  try {
+    const d = await api('/atelier/stats');
+    const g = d.global;
+    $('st-global').innerHTML = [
+      ['Expériences', g.experiences], ['Noyaux', g.noyaux],
+      ['Annotations', g.annotations], ['Validées', g.validees],
+      ['Groupes A₃', g.groupes], ['Manques', g.manques],
+      ['Écarts assistant', d.ecarts_assistant],
+    ].map(([l, v]) => `<div class="s"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+    const bars = (rows, lab, val, cls) => rows.length ? rows.map(r => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)">
+        <span>${cls ? `<span class="b b-${esc(r[cls])}">${esc(lab(r))}</span>` : esc(lab(r))}</span>
+        <strong>${val(r)}</strong></div>`).join('') : '<div class="empty small">—</div>';
+
+    $('st-regime').innerHTML = bars(d.par_regime, r => `${r.place} · ${r.regime}`, r => r.n, 'regime');
+    $('st-perf').innerHTML   = bars(d.par_potentiel,
+      r => `${r.potentiel_performatif || '—'} (${r.statut})`, r => r.n, 'potentiel_performatif');
+    $('st-manq').innerHTML   = bars(d.top_manques, r => r.type_manque, r => r.n, null);
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DÉMARRAGE
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => show(b.dataset.v));
+['f-corpus','f-cat','f-statut'].forEach(id => $(id).onchange = chargerListe);
+
+(async () => {
+  if (S.token) { await entrer(); await chargerCorpus(); }
+})();
+</script>
+</body>
+</html>
