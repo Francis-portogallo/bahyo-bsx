@@ -71,6 +71,7 @@ async function call(method, path, body, essai = 1) {
 const GET   = p       => call('GET', p);
 const POST  = (p, b)  => call('POST', p, b);
 const PATCH = (p, b)  => call('PATCH', p, b);
+const PUT   = (p, b)  => call('PUT', p, b);
 const DEL   = p       => call('DELETE', p);
 
 // ── Etat du test ─────────────────────────────────────────────────────────────
