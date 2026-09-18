@@ -97,6 +97,16 @@ async function requireAnnotateur(req, res, next) {
 
 router.use(requireAuth, requireAnnotateur);
 
+// ── Contournement O2switch ───────────────────────────────────────────────────
+// Apache/mod_security coupe les requetes PATCH avant qu'elles atteignent Node
+// (ECONNRESET cote client). PUT et DELETE passent normalement. On enregistre
+// donc chaque modification partielle sur les deux methodes : PUT fonctionne
+// aujourd'hui, PATCH redeviendra utilisable sur un hebergement sans ce filtre.
+function modifier(chemin, handler) {
+  router.patch(chemin, handler);
+  router.put(chemin, handler);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  REFERENTIEL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -373,7 +383,7 @@ router.post('/manques', async (req, res) => {
 });
 
 // PATCH /atelier/manques/:id — transition de statut / resolution (H.2)
-router.patch('/manques/:id', async (req, res) => {
+modifier('/manques/:id', async (req, res) => {
   try {
     const { statut, resolution, description, question_type, criticite,
             manuel_section_ref } = req.body;
@@ -514,7 +524,7 @@ router.post('/groupes', async (req, res) => {
   }
 });
 
-router.patch('/groupes/:id', async (req, res) => {
+modifier('/groupes/:id', async (req, res) => {
   try {
     const { libelle, justification, potentiel_performatif, statut,
             finalite_exprimee, tiers, tiers_source } = req.body;
@@ -593,7 +603,7 @@ router.put('/groupes/:id/noyaux', async (req, res) => {
 });
 
 // PATCH /atelier/noyaux/:id/orphelin — confirmer ou lever le statut (G.6)
-router.patch('/noyaux/:id/orphelin', async (req, res) => {
+modifier('/noyaux/:id/orphelin', async (req, res) => {
   try {
     const { statut_orphelin } = req.body;
     if (statut_orphelin !== null && !STATUTS_ORPHELIN.includes(statut_orphelin)) {
@@ -612,7 +622,7 @@ router.patch('/noyaux/:id/orphelin', async (req, res) => {
 });
 
 // PATCH /atelier/experiences/:id/statut — marquage manuel, dont 'a_revoir' (M.3)
-router.patch('/experiences/:id/statut', async (req, res) => {
+modifier('/experiences/:id/statut', async (req, res) => {
   try {
     const { statut } = req.body;
     if (!STATUTS_EXPERIENCE.includes(statut)) {

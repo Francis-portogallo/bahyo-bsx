@@ -6,9 +6,10 @@
 <title>Atelier d'annotation — Bahyo</title>
 <!--
      Atelier d'annotation BS — interface du couple annotateur-assistant (AA)
-     @version 1.1.0
+     @version 1.2.0
      @date    2026-09-17
-     @change  1.1.0 — Tiroir Doctrine : le manuel consultable sans quitter
+     @change  1.2.0 — PATCH -> PUT : O2switch bloque PATCH au niveau Apache.
+              1.1.0 — Tiroir Doctrine : le manuel consultable sans quitter
                       l'annotation (touche D, recherche, surlignage).
                       Les deux volets didactiques sont desormais accessibles
                       en meme temps que le travail, conformement au cahier 3.2.
@@ -889,7 +890,7 @@ async function lancerA3() {
 async function majGroupe(id) {
   try {
     await api('/atelier/groupes/' + id, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify({ libelle: $('gl-' + id).value.trim() || null, statut: 'valide' }),
     });
     toast('Groupe enregistré');
