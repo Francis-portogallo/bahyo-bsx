@@ -1,7 +1,10 @@
 // src/server.js
-// @version 1.5.0
-// @date    2026-09-17
-// @change  1.5.0 — Ajout du routeur atelier (annotation BS) monte sur /atelier.
+// @version 1.6.0
+// @date    2026-09-18
+// @change  1.6.0 — Atelier v1.1.0 : conformite cahier de recette (historique
+//                  complet des annotations, versionnement du manuel, statuts,
+//                  export SLM sur /atelier/export).
+//          1.5.0 — Ajout du routeur atelier (annotation BS) monte sur /atelier.
 //                  Assistant Mistral via src/services/mistral.js.
 //          1.4.0 — Ajout du routeur webhook (GitHub auto-deploy) monte sur /github-deploy-hook.
 //                  Monte avant express.json() pour preserver le body brut (HMAC).
@@ -39,7 +42,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app     = express();
 const PORT    = process.env.PORT || 3001;
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 // ── Securite ─────────────────────────────────────────────────────────────────
 app.use(helmet({
