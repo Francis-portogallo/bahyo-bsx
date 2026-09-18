@@ -45,15 +45,28 @@ function titre(t) { console.log(`\n== ${t} ${'='.repeat(Math.max(0, 62 - t.lengt
 
 // ── Client HTTP ──────────────────────────────────────────────────────────────
 let TOKEN = null;
-async function call(method, path, body) {
-  const r = await fetch(BASE + path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try { data = await r.json(); } catch { /* corps vide */ }
-  return { status: r.status, data };
+
+// Une coupure reseau ne doit jamais tuer la suite : on reessaie une fois,
+// puis on renvoie un statut 0 que les checks traiteront comme un echec.
+async function call(method, path, body, essai = 1) {
+  try {
+    const r = await fetch(BASE + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await r.json(); } catch { /* corps vide */ }
+    return { status: r.status, data };
+  } catch (err) {
+    const cause = err.cause?.code || err.cause?.message || err.message;
+    if (essai < 3) {
+      console.log(`      (reseau : ${cause} sur ${method} ${path} — nouvelle tentative ${essai + 1}/3)`);
+      await new Promise(r => setTimeout(r, 1500 * essai));
+      return call(method, path, body, essai + 1);
+    }
+    return { status: 0, data: { error: `connexion perdue : ${cause}` }, reseau: true };
+  }
 }
 const GET   = p       => call('GET', p);
 const POST  = (p, b)  => call('POST', p, b);
@@ -101,12 +114,30 @@ async function main() {
         `${corpus.data?.corpus?.length} corpus`);
 
   const exps = await GET('/atelier/experiences?limit=200');
-  const n = exps.data?.experiences?.length || 0;
-  check('experiences listees', n > 0, `${n} experiences`);
+  const liste = exps.data?.experiences;
+  const n = liste?.length || 0;
+  check('experiences listees', n > 0,
+        Array.isArray(liste) ? `${n} experiences`
+                             : `HTTP ${exps.status} — ${exps.data?.error || 'reponse inattendue'}`);
+
+  if (!n) {
+    console.log(`\n  Arret : la route /atelier/experiences ne renvoie pas de liste.`);
+    console.log(`  Reponse brute : ${JSON.stringify(exps.data).slice(0, 300)}`);
+    console.log(`  Cause la plus frequente : migration 016 non executee`);
+    console.log(`  (colonnes statut / exploitable absentes de bahyo_atelier_experience).\n`);
+    console.log(`  BILAN PARTIEL : ${R.ok} OK, ${R.ko} echec(s)\n`);
+    await pool.end();
+    process.exit(1);
+  }
 
   // Choisit une experience exploitable et riche (pour avoir des tiers)
-  const cible = exps.data.experiences.find(e => e.categorie === 'riche' && +e.nb_noyaux > 2)
-             || exps.data.experiences.find(e => +e.nb_noyaux > 0);
+  const cible = liste.find(e => e.categorie === 'riche' && +e.nb_noyaux > 2)
+             || liste.find(e => +e.nb_noyaux > 0);
+  if (!cible) {
+    console.log('\n  Arret : aucune experience avec des noyaux.\n');
+    await pool.end();
+    process.exit(1);
+  }
   T.expId = cible.id;
   check('experience cible choisie', !!T.expId, `${cible.poste} (${cible.nb_noyaux} noyaux)`);
 
@@ -293,7 +324,26 @@ async function main() {
   const gMaj = await PATCH('/atelier/groupes/' + T.groupeIds[0],
                            { libelle: 'TEST — BS composite renomme', statut: 'valide' });
   check('PATCH groupe', gMaj.status === 200 &&
-        gMaj.data?.groupe?.libelle === 'TEST — BS composite renomme');
+        gMaj.data?.groupe?.libelle === 'TEST — BS composite renomme',
+        gMaj.status === 200 ? '' : `HTTP ${gMaj.status} — ${gMaj.data?.error || ''}`);
+  check('revision incrementee (trigger historique)',
+        gMaj.status !== 200 || gMaj.data?.groupe?.revision >= 2,
+        `revision=${gMaj.data?.groupe?.revision}`);
+
+  // Recomposition des membres (G.2)
+  const gNoy = await PUT(`/atelier/groupes/${T.groupeIds[0]}/noyaux`, { noyau_ids: [T.noyauId] });
+  check('PUT membres du groupe', gNoy.status === 200,
+        gNoy.status === 200 ? '' : `HTTP ${gNoy.status} — ${gNoy.data?.error || ''}`);
+
+  // Statut orphelin (G.6)
+  const orph = await PATCH(`/atelier/noyaux/${T.noyauId}/orphelin`, { statut_orphelin: 'candidat' });
+  check('PATCH statut orphelin', orph.status === 200,
+        orph.data?.noyau?.statut_orphelin || `HTTP ${orph.status}`);
+
+  // Statut d'experience, dont le marquage manuel 'a_revoir' (M.3)
+  const stExp = await PATCH(`/atelier/experiences/${T.expId}/statut`, { statut: 'a_revoir' });
+  check('PATCH statut experience', stExp.status === 200, stExp.data?.experience?.statut);
+  await PATCH(`/atelier/experiences/${T.expId}/statut`, { statut: 'en_cours' });
 
   if (AVEC_IA) {
     const a3 = await POST(`/atelier/experiences/${T.expId}/passage-a3`, { creer_groupes: true });
@@ -336,6 +386,94 @@ async function main() {
         manBad.status === 400 && manBad.data?.code === 'TROIS_QUESTIONS',
         `HTTP ${manBad.status}`);
 
+  // ── 8bis. Historique complet des reeditions (E.6) ──────────────────────────
+  titre('8bis. Historique des reeditions');
+  const annotCour = (await GET('/atelier/experiences/' + T.expId))
+    .data.noyaux.find(n => n.id === T.noyauId)
+    ?.annotations?.find(a => a.place === 'A1');
+  check('annotation A1 retrouvee', !!annotCour, `revision=${annotCour?.revision}`);
+  check('revision > 1 apres reeditions', (annotCour?.revision || 0) > 1,
+        `${annotCour?.revision} revision(s)`);
+  check('version_manuel estampillee', annotCour?.version_manuel != null,
+        `v${annotCour?.version_manuel}`);
+
+  if (annotCour?.id) {
+    const h = await GET(`/atelier/annotations/${annotCour.id}/historique`);
+    check('GET historique annotation', h.status === 200);
+    const n = h.data?.historique?.length || 0;
+    check('versions anterieures archivees', n >= 1, `${n} version(s)`);
+    check('coherence revision / historique',
+          n === (annotCour.revision - 1),
+          `revision=${annotCour.revision}, archivees=${n}`);
+    const prem = h.data?.historique?.[h.data.historique.length - 1];
+    check('valeur initiale conservee', !!prem?.regime,
+          prem ? `v1 : regime=${prem.regime}, ident=${prem.identification}` : '');
+  }
+
+  // ── 8ter. Versionnement du manuel (J.4 / M.2) ──────────────────────────────
+  titre('8ter. Versionnement du manuel');
+  const vAvant = (await GET('/atelier/referentiel')).data?.version_manuel;
+  const manOk = await call('PUT', '/atelier/manuel/test-recette', {
+    titre: 'TEST — section de recette',
+    contenu_md: 'Section creee par le test d integration. Supprimable.',
+    ordre: 999,
+    quoi: 'Creation d une section de test.',
+    ou: 'Manuel vivant, section test-recette.',
+    pourquoi: 'Verifier le versionnement exige par J.4 du cahier de recette.',
+  });
+  check('PUT manuel avec les 3 questions', manOk.status === 200, `HTTP ${manOk.status}`);
+  const vApres = (await GET('/atelier/referentiel')).data?.version_manuel;
+  check('version globale incrementee', vApres === vAvant + 1, `v${vAvant} -> v${vApres}`);
+
+  const vers = await GET('/atelier/manuel/test-recette/versions');
+  check('historique de section accessible', (vers.data?.versions?.length || 0) >= 1,
+        `${vers.data?.versions?.length} version(s)`);
+  check('les 3 questions consignees',
+        !!vers.data?.versions?.[0]?.quoi && !!vers.data?.versions?.[0]?.ou
+        && !!vers.data?.versions?.[0]?.pourquoi);
+
+  // ── 8quater. Export vers le SLM (Partie L) ─────────────────────────────────
+  titre('8quater. Export SLM (Partie L)');
+  const exp1 = await GET(`/atelier/export/experience/${T.expId}`);
+  check('GET export/experience', exp1.status === 200, `HTTP ${exp1.status}`);
+
+  const e0 = exp1.data?.experiences?.[0];
+  check('schema L.2 — champs racine', !!e0
+    && 'id_experience' in e0 && 'texte_source' in e0 && 'noyaux' in e0
+    && 'groupes_a3' in e0 && 'dialogues' in e0 && 'manques' in e0);
+  check('texte_source integral', (e0?.texte_source || '').length > 50,
+        `${(e0?.texte_source || '').length} caracteres`);
+
+  const n0 = e0?.noyaux?.[0];
+  check('schema L.2 — noyau', !!n0 && 'marquages_decoupeur' in n0
+    && 'version_decoupeur' in n0 && 'rang_dans_description' in n0);
+
+  const a0 = e0?.noyaux?.flatMap(n => n.annotations || [])
+                  .find(a => a.place === 'A1');
+  check('schema L.2 — annotation', !!a0 && 'sous_type' in a0
+    && 'candidat_composition' in a0 && 'version_manuel' in a0);
+  check('historique inclus dans l export', Array.isArray(a0?.historique),
+        `${a0?.historique?.length ?? '—'} version(s)`);
+
+  const d0 = e0?.dialogues?.[0];
+  check('schema L.2 — dialogue avec tours', !!d0 && Array.isArray(d0.tours)
+    && d0.tours.length >= 2, `${d0?.tours?.length} tours`);
+  check('documents_consultes present', Array.isArray(d0?.documents_consultes));
+
+  check('comptages presents', !!exp1.data?.comptages?.noyaux,
+        JSON.stringify(exp1.data?.comptages?.par_place));
+  check('COHERENCE REFERENTIELLE (L.5)', (exp1.data?.anomalies?.length || 0) === 0,
+        (exp1.data?.anomalies || []).slice(0, 2).join(' | ') || 'aucune anomalie');
+
+  const ctrl = await GET('/atelier/export/controle');
+  check('GET export/controle', ctrl.status === 200,
+        ctrl.data?.coherence_referentielle);
+
+  const expTout = await GET('/atelier/export?tout=1');
+  check('GET export integral', expTout.status === 200,
+        `${expTout.data?.comptages?.experiences} experiences, `
+        + `${expTout.data?.comptages?.annotations} annotations`);
+
   // ── 9. Nettoyage ───────────────────────────────────────────────────────────
   titre('9. Nettoyage');
   if (CLEAN) {
@@ -350,6 +488,10 @@ async function main() {
                  WHERE noyau_id = $1 AND annotateur_id = $2
                    AND (identification LIKE 'TEST%' OR commentaire LIKE '%test%')`,
                 [T.noyauId, T.userId]);
+    await query(`DELETE FROM bahyo_atelier_manuel_version WHERE section_cle = 'test-recette'`);
+    await query(`DELETE FROM bahyo_atelier_manuel WHERE section_cle = 'test-recette'`);
+    await query(`UPDATE bahyo_atelier_noyau SET statut_orphelin = NULL WHERE id = $1`,
+                [T.noyauId]);
     console.log('  Traces du test supprimees.');
   } else {
     console.log('  Traces conservees (relancer avec --clean pour les supprimer).');
