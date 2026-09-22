@@ -600,6 +600,12 @@ async function main() {
     if (T.groupeIds.length) {
       await query(`DELETE FROM bahyo_atelier_groupe WHERE id = ANY($1)`, [T.groupeIds]);
     }
+    // Balaie aussi les groupes laisses par des executions anterieures : sans
+    // cela, un groupe volontairement incoherent survit et fait echouer le
+    // controle de coherence des sessions suivantes.
+    const { rowCount: orphelins } = await query(
+      `DELETE FROM bahyo_atelier_groupe WHERE tiers LIKE 'TEST-%' OR libelle LIKE 'TEST %'`);
+    if (orphelins) console.log(`  ${orphelins} groupe(s) de test anterieur(s) supprime(s).`);
     await query(`DELETE FROM bahyo_atelier_annotation
                  WHERE noyau_id = $1 AND annotateur_id = $2
                    AND (identification LIKE 'TEST%' OR commentaire LIKE '%test%')`,
