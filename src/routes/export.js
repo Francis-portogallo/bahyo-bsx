@@ -84,7 +84,7 @@ async function batir(expIds, { historique = true } = {}) {
     query(`SELECT m.* FROM bahyo_atelier_message m
            WHERE m.experience_id = ANY($1)
               OR m.noyau_id IN (SELECT id FROM bahyo_atelier_noyau WHERE experience_id = ANY($1))
-           ORDER BY COALESCE(m.noyau_id, m.experience_id), m.place, m.tour, m.created_at`,
+           ORDER BY COALESCE(m.noyau_id, m.experience_id), m.place, m.created_at, m.tour`,
           [expIds]),
 
     query(`SELECT mq.*, u.email AS annotateur_email

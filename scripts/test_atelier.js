@@ -457,6 +457,15 @@ async function main() {
           rem.data?.avertissement ? 'avertissement emis' : 'aucun avertissement');
     check('incoherence_atomise remontee',
           rem.data?.groupe?.incoherence_atomise === true);
+
+    // Retablit la coherence : le controle d'export de la partie L verifie
+    // la regle 4.6 et signalerait legitimement ce groupe laisse en l'etat.
+    const remis = await POST(`/atelier/groupes/${gAtom.data.groupe.id}/exclusions`, {
+      mode: 'sans_chaine_finalite', pose_par: 'systeme',
+      justification: 'Retabli par le test apres verification du retrait manuel.',
+    });
+    check('mode retabli apres le test de retrait', remis.status === 200
+          && remis.data?.groupe?.incoherence_atomise === false);
   }
 
   // ── 7. Catalogue et stats ──────────────────────────────────────────────────

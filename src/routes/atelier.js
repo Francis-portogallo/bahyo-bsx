@@ -1147,7 +1147,9 @@ router.post('/dialogue', async (req, res) => {
         AND ($2::uuid IS NULL OR experience_id = $2)
         AND ($3::uuid IS NULL OR groupe_id = $3)
         AND role <> 'systeme'
-      ORDER BY tour NULLS LAST, created_at LIMIT 30
+      -- L'horodatage prime : les messages anterieurs a la v1.2.0 n'ont pas
+      -- de numero de tour, et NULLS LAST les rejetterait apres les recents.
+      ORDER BY created_at, tour NULLS LAST LIMIT 30
     `, [noyau_id, experience_id, groupe_id]);
 
     const tourBase = hist.length;
@@ -1187,7 +1189,7 @@ router.get('/messages', async (req, res) => {
       WHERE ($1::uuid IS NULL OR noyau_id = $1)
         AND ($2::uuid IS NULL OR experience_id = $2)
         AND ($3::uuid IS NULL OR groupe_id = $3)
-      ORDER BY tour NULLS LAST, created_at
+      ORDER BY created_at, tour NULLS LAST
     `, [noyau_id || null, experience_id || null, groupe_id || null]);
     res.json({ messages: rows });
   } catch (err) {
