@@ -1,7 +1,10 @@
 // src/routes/export.js
-// @version 1.0.0
-// @date    2026-09-18
-// @change  1.0.0 — Export vers le SLM, conforme au schema de la Partie L.2 du
+// @version 1.1.0
+// @date    2026-09-22
+// @change  1.1.0 — specification_modes_exclusion.md §6 : inscription_finalite,
+//                  modes_exclusion, potentiellement_performatif (derive a
+//                  l'export, jamais stocke), champ_pratique.
+//          1.0.0 — Export vers le SLM, conforme au schema de la Partie L.2 du
 //                  cahier de recette du 18/09/2026.
 //                  Monte sur /atelier/export (requireAnnotateur herite).
 //
@@ -37,7 +40,8 @@ async function versionManuelCourante() {
 async function batir(expIds, { historique = true } = {}) {
   if (!expIds.length) return [];
 
-  const [exps, noyaux, annots, hist, groupes, membres, msgs, manques] = await Promise.all([
+  const [exps, noyaux, annots, hist, groupes, membres, exclusions, msgs, manques] =
+    await Promise.all([
     query(`SELECT e.*, c.nom AS corpus_nom, c.version_decoupeur AS corpus_decoupeur
            FROM bahyo_atelier_experience e
            LEFT JOIN bahyo_atelier_corpus c ON c.id = e.corpus_id
@@ -69,6 +73,13 @@ async function batir(expIds, { historique = true } = {}) {
            FROM bahyo_atelier_groupe_noyau gn
            JOIN bahyo_atelier_groupe g ON g.id = gn.groupe_id
            WHERE g.experience_id = ANY($1)`, [expIds]),
+
+    query(`SELECT m.*, u.email AS annotateur_email
+           FROM bahyo_atelier_mode_exclusion m
+           LEFT JOIN bahyo_user u ON u.id = m.annotateur_id
+           JOIN bahyo_atelier_groupe g ON g.id = m.groupe_id
+           WHERE g.experience_id = ANY($1)
+           ORDER BY m.created_at`, [expIds]),
 
     query(`SELECT m.* FROM bahyo_atelier_message m
            WHERE m.experience_id = ANY($1)
@@ -109,6 +120,12 @@ async function batir(expIds, { historique = true } = {}) {
   for (const m of membres.rows) {
     if (!membresParGroupe.has(m.groupe_id)) membresParGroupe.set(m.groupe_id, []);
     membresParGroupe.get(m.groupe_id).push(m.noyau_id);
+  }
+
+  const exclusionsParGroupe = new Map();
+  for (const m of exclusions.rows) {
+    if (!exclusionsParGroupe.has(m.groupe_id)) exclusionsParGroupe.set(m.groupe_id, []);
+    exclusionsParGroupe.get(m.groupe_id).push(m);
   }
 
   const groupesParExp = new Map();
@@ -207,23 +224,41 @@ async function batir(expIds, { historique = true } = {}) {
       };
     });
 
-    const groupesExp = (groupesParExp.get(e.id) || []).map(g => ({
-      id_groupe: g.id,
-      tiers: g.tiers,
-      tiers_source: g.tiers_source,
-      noyaux_membres: membresParGroupe.get(g.id) || [],
-      finalite_exprimee: g.finalite_exprimee,
-      potentiel_performatif: g.potentiel_performatif,
-      nom_bs_composite: g.libelle,
-      justification: g.justification,
-      origine: g.origine,
-      statut: g.statut,
-      revision: g.revision,
-      proposition_assistant: g.proposition_assistant,
-      annotateur: g.annotateur_email || g.annotateur_id,
-      horodatage: iso(g.updated_at),
-      version_manuel: g.version_manuel,
-    }));
+    const groupesExp = (groupesParExp.get(e.id) || []).map(g => {
+      const mx = exclusionsParGroupe.get(g.id) || [];
+      return {
+        id_groupe: g.id,
+        tiers: g.tiers,
+        tiers_source: g.tiers_source,
+        noyaux_membres: membresParGroupe.get(g.id) || [],
+        finalite_exprimee: g.finalite_exprimee,
+        inscription_finalite: g.inscription_finalite,
+        modes_exclusion: mx.map(m => ({
+          mode: m.mode,
+          libelle_propose: m.libelle_propose,
+          justification: m.justification,
+          annotateur: m.pose_par === 'systeme'
+            ? 'systeme'
+            : (m.annotateur_email || m.annotateur_id),
+          pose_par: m.pose_par,
+          horodatage: iso(m.created_at),
+          version_manuel: m.version_manuel,
+        })),
+        // DERIVE (4.5) : negation par l'echec. Exporte bien que calculable,
+        // pour permettre une verification de coherence a la reprise (§6).
+        potentiellement_performatif: mx.length === 0,
+        champ_pratique: g.champ_pratique,
+        nom_bs_composite: g.libelle,
+        justification: g.justification,
+        origine: g.origine,
+        statut: g.statut,
+        revision: g.revision,
+        proposition_assistant: g.proposition_assistant,
+        annotateur: g.annotateur_email || g.annotateur_id,
+        horodatage: iso(g.updated_at),
+        version_manuel: g.version_manuel,
+      };
+    });
 
     const dialoguesExp = (dialoguesParExp.get(e.id) || []).map(f => {
       const dern = f.tours[f.tours.length - 1];
@@ -305,6 +340,32 @@ function verifier(experiences) {
           pbs.push(`groupe ${g.id_groupe} : noyau ${nid} absent de l'experience ${e.id_experience}`);
         }
       }
+      // Plafond latent (P.3), porte desormais sur inscription_finalite
+      if (g.tiers_source === 'implicite' && g.inscription_finalite === 'porte') {
+        pbs.push(`groupe ${g.id_groupe} : tiers implicite annote « porte » `
+               + `(plafond « latent »)`);
+      }
+      // Coherence 4.6 : atomise implique sans_chaine_finalite
+      const modes = (g.modes_exclusion || []).map(m => m.mode);
+      if (g.inscription_finalite === 'atomise' && !modes.includes('sans_chaine_finalite')) {
+        pbs.push(`groupe ${g.id_groupe} : inscription « atomise » sans le mode `
+               + `« sans_chaine_finalite »`);
+      }
+      // Derivation (4.5)
+      const attendu = modes.length === 0;
+      if (g.potentiellement_performatif !== attendu) {
+        pbs.push(`groupe ${g.id_groupe} : potentiellement_performatif=`
+               + `${g.potentiellement_performatif} incoherent avec `
+               + `${modes.length} mode(s) d'exclusion`);
+      }
+      for (const m of (g.modes_exclusion || [])) {
+        if (!m.justification?.trim()) {
+          pbs.push(`groupe ${g.id_groupe} : mode « ${m.mode} » sans justification`);
+        }
+        if (m.mode === 'autre' && !m.libelle_propose?.trim()) {
+          pbs.push(`groupe ${g.id_groupe} : mode « autre » sans libelle propose`);
+        }
+      }
     }
     for (const d of e.dialogues) {
       if (d.contexte.type === 'noyau' && !ids.has(d.contexte.id)) {
@@ -335,8 +396,9 @@ function compter(experiences) {
     experiences: experiences.length,
     noyaux: 0, annotations: 0, revisions_archivees: 0,
     par_place: { A1: 0, A2: 0, A3: 0 },
-    par_regime: {}, par_potentiel: {},
-    groupes: 0, dialogues: 0, tours: 0, manques: 0,
+    par_regime: {}, par_inscription: {}, par_mode_exclusion: {},
+    groupes: 0, groupes_potentiellement_performatifs: 0,
+    dialogues: 0, tours: 0, manques: 0,
     annotations_avec_ecart: 0, manques_avec_question: 0,
   };
   for (const e of experiences) {
@@ -352,8 +414,12 @@ function compter(experiences) {
     }
     c.groupes += e.groupes_a3.length;
     for (const g of e.groupes_a3) {
-      const p = g.potentiel_performatif || 'non_qualifie';
-      c.par_potentiel[p] = (c.par_potentiel[p] || 0) + 1;
+      const p = g.inscription_finalite || 'non_qualifie';
+      c.par_inscription[p] = (c.par_inscription[p] || 0) + 1;
+      if (g.potentiellement_performatif) c.groupes_potentiellement_performatifs++;
+      for (const m of (g.modes_exclusion || [])) {
+        c.par_mode_exclusion[m.mode] = (c.par_mode_exclusion[m.mode] || 0) + 1;
+      }
     }
     c.dialogues += e.dialogues.length;
     for (const d of e.dialogues) c.tours += d.tours.length;
@@ -379,7 +445,7 @@ router.get('/experience/:id', async (req, res) => {
         genere_le: new Date().toISOString(),
         genere_par: req.user.id,
         portee: 'experience',
-        version_schema: 'L.2/2026-09-18',
+        version_schema: 'L.2/2026-09-22',
         version_manuel_courante: await versionManuelCourante(),
         historique_inclus: historique,
       },
@@ -428,7 +494,7 @@ router.get('/', async (req, res) => {
         portee: tout ? 'integralite' : 'lot_filtre',
         filtres: { categorie: categorie || null, statut: statut || null,
                    corpus_id: corpus_id || null, annotees_seulement: annotees },
-        version_schema: 'L.2/2026-09-18',
+        version_schema: 'L.2/2026-09-22',
         version_manuel_courante: await versionManuelCourante(),
         historique_inclus: historique,
       },

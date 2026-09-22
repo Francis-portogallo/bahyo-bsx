@@ -1,7 +1,10 @@
 // src/server.js
-// @version 1.6.0
-// @date    2026-09-18
-// @change  1.6.0 — Atelier v1.1.0 : conformite cahier de recette (historique
+// @version 1.7.0
+// @date    2026-09-22
+// @change  1.7.0 — Atelier v1.2.0 : modes d'exclusion, potentiel performatif
+//                  derive, champ de pratique. Terminologie « doctrine »
+//                  remplacee par formalisme / regles d'application.
+//          1.6.0 — Atelier v1.1.0 : conformite cahier de recette (historique
 //                  complet des annotations, versionnement du manuel, statuts,
 //                  export SLM sur /atelier/export).
 //          1.5.0 — Ajout du routeur atelier (annotation BS) monte sur /atelier.
@@ -42,7 +45,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app     = express();
 const PORT    = process.env.PORT || 3001;
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 
 // ── Securite ─────────────────────────────────────────────────────────────────
 app.use(helmet({

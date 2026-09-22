@@ -1,7 +1,14 @@
 // src/routes/atelier.js
-// @version 1.1.0
-// @date    2026-09-18
-// @change  1.1.0 — Mise en conformite cahier de recette (18/09/2026) :
+// @version 1.2.0
+// @date    2026-09-22
+// @change  1.2.0 — specification_modes_exclusion.md v1.0 :
+//                  potentiel_performatif -> inscription_finalite (renommage),
+//                  modes d'exclusion (table dediee), potentiellement_performatif
+//                  DERIVE et jamais saisi, champ_pratique, registre des modes.
+//                  Terminologie : le terme « doctrine » est proscrit.
+//                  FORMALISME 3A designe le systeme, qui est stable ;
+//                  REGLES D'APPLICATION designe ce qui evolue et se versionne.
+//          1.1.0 — Mise en conformite cahier de recette (18/09/2026) :
 //                  estampillage version_manuel, statut d'experience,
 //                  statut/resolution des manques, versionnement du manuel,
 //                  noyaux sans tiers + statut orphelin, contexte assistant
@@ -23,7 +30,7 @@ const router = Router();
 // ── Vocabulaire normalise (aligne prompt A3 v0.2 + cahier de conception) ─────
 const REGIMES = ['declaratif', 'constatif', 'orphelin'];
 const SOUS_CATEGORIES = ['fonctionnel', 'relationnel'];
-const POTENTIELS = ['porte', 'latent', 'atomise'];
+const INSCRIPTIONS = ['porte', 'latent', 'atomise'];   // ex-potentiel_performatif
 const PLACES = ['A1', 'A2', 'A3'];
 const STATUTS_ANNOTATION = ['brouillon', 'valide', 'litigieux', 'a_revoir'];
 const STATUTS_EXPERIENCE = ['nouveau', 'en_cours', 'annote', 'a_revoir'];
@@ -31,6 +38,7 @@ const STATUTS_MANQUE     = ['ouvert', 'en_discussion', 'resolu'];
 const STATUTS_GROUPE     = ['proposition', 'valide', 'rejete', 'orphelin'];
 const STATUTS_ORPHELIN   = ['candidat', 'confirme', 'rattache'];
 const TYPES_DIALOGUE     = ['interne_assistant', 'avec_annotateur', 'avec_utilisateur'];
+const POSE_PAR           = ['annotateur', 'systeme', 'assistant'];
 const TYPES_MANQUE = [
   { code: 'contexte_projet',     label: 'Contexte du projet absent' },
   { code: 'precision_acte',      label: "Acte insuffisamment precis" },
@@ -43,16 +51,67 @@ const TYPES_MANQUE = [
   { code: 'procede_non_nomme',   label: 'Procede employe non nomme' },
   { code: 'echelle',             label: "Echelle de l'intervention inconnue" },
   { code: 'champ_manquant',      label: 'Champ manquant dans le schema' },
-  { code: 'incoherence_doctrinale', label: 'Incoherence doctrinale' },
+  { code: 'incoherence_formalisme', label: 'Incoherence avec le formalisme' },
   { code: 'cas_non_couvert',     label: 'Cas non couvert par le manuel' },
   { code: 'autre',               label: 'Autre' },
 ];
 
-// Version de doctrine courante — estampillee sur toute decision (B.3/B.4)
+// Version courante des regles d'application — estampillee sur toute decision.
+// Le FORMALISME 3A (trois places, agglomeration par A3) est stable ; ce qui
+// evolue et se versionne, ce sont ses regles d'application.
 async function versionManuel() {
   const { rows } = await query(
     "SELECT valeur FROM bahyo_config WHERE cle = 'atelier_manuel_version'");
   return rows[0] ? parseInt(rows[0].valeur, 10) : 1;
+}
+
+// Charge le registre des modes d'exclusion reconnus (4.4 : extensible sans
+// migration — un mode promu est simplement ajoute a la table registre).
+async function registreModes() {
+  const { rows } = await query(
+    `SELECT mode, libelle, definition FROM bahyo_atelier_mode_registre
+     WHERE actif = TRUE ORDER BY ordre, mode`);
+  return rows;
+}
+
+// Derivation (4.5) : negation par l'echec, jamais stockee.
+//   non_valorisable             :- <un mode d'exclusion quelconque>.
+//   potentiellement_performatif :- not non_valorisable.
+async function exclusionsDeGroupes(groupeIds) {
+  if (!groupeIds.length) return new Map();
+  const { rows } = await query(
+    `SELECT m.*, u.email AS annotateur_email
+     FROM bahyo_atelier_mode_exclusion m
+     LEFT JOIN bahyo_user u ON u.id = m.annotateur_id
+     WHERE m.groupe_id = ANY($1) ORDER BY m.created_at`, [groupeIds]);
+  const parGroupe = new Map();
+  for (const m of rows) {
+    if (!parGroupe.has(m.groupe_id)) parGroupe.set(m.groupe_id, []);
+    parGroupe.get(m.groupe_id).push(m);
+  }
+  return parGroupe;
+}
+
+// Enrichit une liste de groupes avec leurs exclusions et le statut derive.
+async function deriverGroupes(groupes) {
+  const parGroupe = await exclusionsDeGroupes(groupes.map(g => g.id));
+  return groupes.map(g => {
+    const mx = parGroupe.get(g.id) || [];
+    return {
+      ...g,
+      modes_exclusion: mx.map(m => ({
+        id: m.id, mode: m.mode, libelle_propose: m.libelle_propose,
+        justification: m.justification, pose_par: m.pose_par,
+        annotateur: m.annotateur_email || m.annotateur_id,
+        horodatage: m.created_at, version_manuel: m.version_manuel,
+      })),
+      // DERIVE — non saisissable, non stocke
+      potentiellement_performatif: mx.length === 0,
+      // Signale l'incoherence de 4.6 sans bloquer
+      incoherence_atomise: g.inscription_finalite === 'atomise'
+        && !mx.some(m => m.mode === 'sans_chaine_finalite'),
+    };
+  });
 }
 
 // Recalcule le statut d'une experience depuis l'etat reel de ses annotations.
@@ -115,7 +174,7 @@ router.get('/referentiel', async (req, res) => {
   res.json({
     regimes: REGIMES,
     sous_categories: SOUS_CATEGORIES,
-    potentiels_performatifs: POTENTIELS,
+    inscriptions_finalite: INSCRIPTIONS,
     places: PLACES,
     statuts_annotation: STATUTS_ANNOTATION,
     statuts_experience: STATUTS_EXPERIENCE,
@@ -124,6 +183,8 @@ router.get('/referentiel', async (req, res) => {
     statuts_orphelin: STATUTS_ORPHELIN,
     types_dialogue: TYPES_DIALOGUE,
     types_manque: TYPES_MANQUE,
+    pose_par: POSE_PAR,
+    modes_exclusion: await registreModes(),
     prompt_a3_version: mistral.PROMPT_A3_VERSION,
     version_manuel: await versionManuel(),
   });
@@ -163,7 +224,7 @@ router.get('/corpus', async (req, res) => {
 // statut : 'tous' | 'vierge' | 'en_cours' | 'complet'
 router.get('/experiences', async (req, res) => {
   try {
-    const { corpus_id, categorie, statut = 'tous', exploitable } = req.query;
+    const { corpus_id, categorie, statut = 'tous', exploitable, pp } = req.query;
     const limit  = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
 
@@ -176,6 +237,16 @@ router.get('/experiences', async (req, res) => {
     }
     if (exploitable === '1') where.push('e.exploitable = TRUE');
     if (exploitable === '0') where.push('e.exploitable = FALSE');
+    // Filtre « potentiellement performatif » (5.3) : au moins un groupe sans
+    // aucun mode d'exclusion / aucun groupe qui en soit exempt.
+    if (pp === '1') where.push(`EXISTS (
+      SELECT 1 FROM bahyo_atelier_groupe g2 WHERE g2.experience_id = e.id
+        AND NOT EXISTS (SELECT 1 FROM bahyo_atelier_mode_exclusion x
+                        WHERE x.groupe_id = g2.id))`);
+    if (pp === '0') where.push(`NOT EXISTS (
+      SELECT 1 FROM bahyo_atelier_groupe g2 WHERE g2.experience_id = e.id
+        AND NOT EXISTS (SELECT 1 FROM bahyo_atelier_mode_exclusion x
+                        WHERE x.groupe_id = g2.id))`);
 
     const having = '';
     params.push(limit, offset);
@@ -187,7 +258,11 @@ router.get('/experiences', async (req, res) => {
              e.semes_detectes,
              COUNT(DISTINCT n.id) AS nb_noyaux,
              COUNT(a.id)          AS nb_annotations,
-             COUNT(DISTINCT g.id) AS nb_groupes
+             COUNT(DISTINCT g.id) AS nb_groupes,
+             COUNT(DISTINCT g.id) FILTER (
+               WHERE NOT EXISTS (SELECT 1 FROM bahyo_atelier_mode_exclusion x
+                                 WHERE x.groupe_id = g.id)
+             ) AS nb_pp
       FROM bahyo_atelier_experience e
       LEFT JOIN bahyo_atelier_noyau      n ON n.experience_id = e.id
       LEFT JOIN bahyo_atelier_annotation a ON a.noyau_id = n.id
@@ -252,6 +327,8 @@ router.get('/experiences/:id', async (req, res) => {
       ORDER BY g.created_at
     `, [id]);
 
+    const groupesDerives = await deriverGroupes(groupes);
+
     const { rows: manques } = await query(
       `SELECT * FROM bahyo_atelier_manque
        WHERE experience_id = $1 OR noyau_id IN (
@@ -260,7 +337,7 @@ router.get('/experiences/:id', async (req, res) => {
        ORDER BY created_at`, [id]
     );
 
-    res.json({ experience: exp[0], noyaux, groupes, manques });
+    res.json({ experience: exp[0], noyaux, groupes: groupesDerives, manques });
   } catch (err) {
     console.error('[ATELIER] Erreur experience detail:', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -294,7 +371,7 @@ router.post('/noyaux/:id/annotation', async (req, res) => {
     if (statut && !STATUTS_ANNOTATION.includes(statut)) {
       return res.status(400).json({ error: `statut invalide` });
     }
-    // Regle doctrinale : un ecart avec l'assistant DOIT etre explicite (complement 3.2)
+    // Regle d'application : un ecart avec l'assistant DOIT etre explicite (complement 3.2)
     if (ecart_assistant && (!ecart_explication || ecart_explication.trim().length < 10)) {
       return res.status(400).json({
         error: "Un ecart avec la proposition de l'assistant doit etre explicite (10 caracteres minimum)",
@@ -474,17 +551,20 @@ router.post('/groupes', async (req, res) => {
   try {
     const {
       experience_id, tiers, tiers_source, finalite_exprimee = null,
-      potentiel_performatif, libelle = null, justification = null,
-      noyau_ids = [], origine = 'annotateur', proposition_assistant = null,
+      inscription_finalite, champ_pratique = null,
+      libelle = null, justification = null,
+      noyau_ids = [], modes_exclusion = [],
+      origine = 'annotateur', proposition_assistant = null,
       statut = 'valide',
     } = req.body;
 
     if (!experience_id) return res.status(400).json({ error: 'experience_id requis' });
-    if (potentiel_performatif && !POTENTIELS.includes(potentiel_performatif)) {
-      return res.status(400).json({ error: `potentiel_performatif doit etre parmi ${POTENTIELS.join(', ')}` });
+    if (inscription_finalite && !INSCRIPTIONS.includes(inscription_finalite)) {
+      return res.status(400).json({ error: `inscription_finalite doit etre parmi ${INSCRIPTIONS.join(', ')}` });
     }
-    // Regle du plafond latent (prompt A3 v0.2, regle 4)
-    if (tiers_source === 'implicite' && potentiel_performatif === 'porte') {
+    // Regle du plafond latent (prompt A3 v0.2, regle 4) — porte desormais
+    // sur inscription_finalite, inchangee sur le fond (P.3)
+    if (tiers_source === 'implicite' && inscription_finalite === 'porte') {
       return res.status(400).json({
         error: "Un tiers implicite ne peut pas depasser 'latent'",
         code: 'PLAFOND_LATENT',
@@ -496,16 +576,33 @@ router.post('/groupes', async (req, res) => {
     }
     const vman = await versionManuel();
 
+    // Chaque mode retenu exige sa justification (5.2)
+    for (const m of modes_exclusion) {
+      if (!m?.mode) return res.status(400).json({ error: 'mode requis' });
+      if (!m.justification || m.justification.trim().length < 10) {
+        return res.status(400).json({
+          error: `Le mode « ${m.mode} » exige une justification (10 caracteres minimum)`,
+          code: 'JUSTIFICATION_REQUISE',
+        });
+      }
+      if (m.mode === 'autre' && !m.libelle_propose?.trim()) {
+        return res.status(400).json({
+          error: "Le mode « autre » exige un libelle propose",
+          code: 'LIBELLE_REQUIS',
+        });
+      }
+    }
+
     const groupe = await withTransaction(async (client) => {
       const { rows } = await client.query(`
         INSERT INTO bahyo_atelier_groupe
           (experience_id, tiers, tiers_source, finalite_exprimee,
-           potentiel_performatif, libelle, justification, annotateur_id,
-           origine, proposition_assistant, statut, version_manuel)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+           inscription_finalite, champ_pratique, libelle, justification,
+           annotateur_id, origine, proposition_assistant, statut, version_manuel)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
       `, [experience_id, tiers, tiers_source, finalite_exprimee,
-          potentiel_performatif, libelle, justification, req.user.id,
-          origine, proposition_assistant, statut, vman]);
+          inscription_finalite, champ_pratique, libelle, justification,
+          req.user.id, origine, proposition_assistant, statut, vman]);
 
       const g = rows[0];
       for (const nid of noyau_ids) {
@@ -514,10 +611,22 @@ router.post('/groupes', async (req, res) => {
            VALUES ($1,$2) ON CONFLICT DO NOTHING`, [g.id, nid]
         );
       }
+      for (const m of modes_exclusion) {
+        await client.query(`
+          INSERT INTO bahyo_atelier_mode_exclusion
+            (groupe_id, mode, libelle_propose, justification, annotateur_id,
+             pose_par, version_manuel)
+          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (groupe_id, mode) DO NOTHING
+        `, [g.id, m.mode, m.libelle_propose || null, m.justification,
+            req.user.id, m.pose_par || 'annotateur', vman]);
+      }
       return g;
     });
 
-    res.json({ groupe });
+    // Le trigger 4.6 a pu ajouter 'sans_chaine_finalite' : on relit pour
+    // renvoyer l'etat reel avec son statut derive.
+    const [enrichi] = await deriverGroupes([groupe]);
+    res.json({ groupe: enrichi });
   } catch (err) {
     console.error('[ATELIER] Erreur groupe create:', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -526,22 +635,22 @@ router.post('/groupes', async (req, res) => {
 
 modifier('/groupes/:id', async (req, res) => {
   try {
-    const { libelle, justification, potentiel_performatif, statut,
-            finalite_exprimee, tiers, tiers_source } = req.body;
-    if (potentiel_performatif && !POTENTIELS.includes(potentiel_performatif)) {
-      return res.status(400).json({ error: 'potentiel_performatif invalide' });
+    const { libelle, justification, inscription_finalite, statut,
+            finalite_exprimee, tiers, tiers_source, champ_pratique } = req.body;
+    if (inscription_finalite && !INSCRIPTIONS.includes(inscription_finalite)) {
+      return res.status(400).json({ error: 'inscription_finalite invalide' });
     }
     if (statut && !STATUTS_GROUPE.includes(statut)) {
       return res.status(400).json({ error: `statut doit etre parmi ${STATUTS_GROUPE.join(', ')}` });
     }
     // Plafond latent, y compris a la modification (P.3)
     const { rows: cur } = await query(
-      'SELECT tiers_source, potentiel_performatif FROM bahyo_atelier_groupe WHERE id = $1',
+      'SELECT tiers_source, inscription_finalite FROM bahyo_atelier_groupe WHERE id = $1',
       [req.params.id]);
     if (!cur[0]) return res.status(404).json({ error: 'Groupe introuvable' });
     const srcFinal  = tiers_source ?? cur[0].tiers_source;
-    const perfFinal = potentiel_performatif ?? cur[0].potentiel_performatif;
-    if (srcFinal === 'implicite' && perfFinal === 'porte') {
+    const inscFinal = inscription_finalite ?? cur[0].inscription_finalite;
+    if (srcFinal === 'implicite' && inscFinal === 'porte') {
       return res.status(400).json({
         error: "Un tiers implicite ne peut pas depasser 'latent'",
         code: 'PLAFOND_LATENT',
@@ -552,18 +661,195 @@ modifier('/groupes/:id', async (req, res) => {
       UPDATE bahyo_atelier_groupe SET
         libelle = COALESCE($2, libelle),
         justification = COALESCE($3, justification),
-        potentiel_performatif = COALESCE($4, potentiel_performatif),
+        inscription_finalite = COALESCE($4, inscription_finalite),
         statut = COALESCE($5, statut),
         finalite_exprimee = COALESCE($6, finalite_exprimee),
         tiers = COALESCE($7, tiers),
         tiers_source = COALESCE($8, tiers_source),
+        champ_pratique = COALESCE($9, champ_pratique),
         updated_at = NOW()
       WHERE id = $1 RETURNING *
-    `, [req.params.id, libelle, justification, potentiel_performatif, statut,
-        finalite_exprimee, tiers, tiers_source]);
-    res.json({ groupe: rows[0] });
+    `, [req.params.id, libelle, justification, inscription_finalite, statut,
+        finalite_exprimee, tiers, tiers_source, champ_pratique]);
+
+    const [enrichi] = await deriverGroupes([rows[0]]);
+    res.json({ groupe: enrichi });
   } catch (err) {
     console.error('[ATELIER] Erreur groupe update:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODES D'EXCLUSION (specification du 22/09/2026)
+//
+//  L'annotateur ne juge jamais positivement. Il constate des exclusions ou
+//  n'en constate pas ; potentiellement_performatif s'en derive.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /atelier/groupes/:id/exclusions
+router.post('/groupes/:id/exclusions', async (req, res) => {
+  try {
+    const { mode, libelle_propose = null, justification,
+            pose_par = 'annotateur' } = req.body;
+
+    if (!mode) return res.status(400).json({ error: 'mode requis' });
+    if (!POSE_PAR.includes(pose_par)) {
+      return res.status(400).json({ error: `pose_par doit etre parmi ${POSE_PAR.join(', ')}` });
+    }
+    // Chaque mode retenu ouvre son champ de justification, obligatoire (5.2)
+    if (!justification || justification.trim().length < 10) {
+      return res.status(400).json({
+        error: 'Chaque mode d\'exclusion exige sa justification (10 caracteres minimum)',
+        code: 'JUSTIFICATION_REQUISE',
+      });
+    }
+    // Pour le mode « autre », le libelle propose est egalement obligatoire (4.3)
+    if (mode === 'autre' && !libelle_propose?.trim()) {
+      return res.status(400).json({
+        error: "Le mode « autre » exige un libelle propose, pour que le mode rencontre puisse etre nomme puis promu",
+        code: 'LIBELLE_REQUIS',
+      });
+    }
+    // Le mode doit exister au registre, sauf « autre » qui est la valeur ouverte
+    const { rows: reg } = await query(
+      'SELECT mode FROM bahyo_atelier_mode_registre WHERE mode = $1 AND actif = TRUE',
+      [mode]);
+    if (!reg[0]) {
+      return res.status(400).json({
+        error: `Mode « ${mode} » inconnu du registre. Utiliser « autre » avec un libelle propose.`,
+        code: 'MODE_INCONNU',
+      });
+    }
+
+    const { rows } = await query(`
+      INSERT INTO bahyo_atelier_mode_exclusion
+        (groupe_id, mode, libelle_propose, justification, annotateur_id,
+         pose_par, version_manuel)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT (groupe_id, mode) DO UPDATE SET
+        libelle_propose = EXCLUDED.libelle_propose,
+        justification = EXCLUDED.justification,
+        annotateur_id = EXCLUDED.annotateur_id,
+        pose_par = EXCLUDED.pose_par
+      RETURNING *
+    `, [req.params.id, mode, libelle_propose, justification.trim(),
+        req.user.id, pose_par, await versionManuel()]);
+
+    const { rows: g } = await query(
+      'SELECT * FROM bahyo_atelier_groupe WHERE id = $1', [req.params.id]);
+    const [enrichi] = await deriverGroupes(g);
+    res.json({ exclusion: rows[0], groupe: enrichi });
+  } catch (err) {
+    console.error('[ATELIER] Erreur exclusion create:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /atelier/exclusions/:id — le retrait est toujours permis ; si le
+// groupe reste « atomise », l'incoherence est signalee, jamais bloquee (4.6).
+router.delete('/exclusions/:id', async (req, res) => {
+  try {
+    const { rows: del } = await query(
+      'DELETE FROM bahyo_atelier_mode_exclusion WHERE id = $1 RETURNING groupe_id',
+      [req.params.id]);
+    if (!del[0]) return res.status(404).json({ error: 'Exclusion introuvable' });
+
+    const { rows: g } = await query(
+      'SELECT * FROM bahyo_atelier_groupe WHERE id = $1', [del[0].groupe_id]);
+    const [enrichi] = await deriverGroupes(g);
+    res.json({
+      ok: true,
+      groupe: enrichi,
+      avertissement: enrichi.incoherence_atomise
+        ? "Ce groupe est qualifie « atomise » sans porter le mode « sans_chaine_finalite ». "
+          + "Revisez l'inscription ou retablissez le mode."
+        : null,
+    });
+  } catch (err) {
+    console.error('[ATELIER] Erreur exclusion delete:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /atelier/exclusions/registre — modes reconnus + « autre » recurrents (4.4)
+router.get('/exclusions/registre', async (req, res) => {
+  try {
+    const [reg, usage, autres] = await Promise.all([
+      query(`SELECT * FROM bahyo_atelier_mode_registre ORDER BY ordre, mode`),
+      query(`SELECT mode, COUNT(*) AS n FROM bahyo_atelier_mode_exclusion
+             GROUP BY mode ORDER BY n DESC`),
+      // Les libelles proposes recurrents meritent d'etre promus en mode de
+      // premier rang — c'est ainsi que la morphologie du BS se decouvre.
+      query(`SELECT libelle_propose, COUNT(*) AS n,
+                    array_agg(DISTINCT groupe_id) AS groupes
+             FROM bahyo_atelier_mode_exclusion
+             WHERE mode = 'autre' AND libelle_propose IS NOT NULL
+             GROUP BY libelle_propose ORDER BY n DESC`),
+    ]);
+    res.json({
+      registre: reg.rows,
+      usage: usage.rows,
+      candidats_promotion: autres.rows,
+    });
+  } catch (err) {
+    console.error('[ATELIER] Erreur registre:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /atelier/exclusions/registre — promouvoir un « autre » en mode nomme.
+// Aucune migration des annotations existantes n'est requise (4.4).
+router.post('/exclusions/registre', async (req, res) => {
+  try {
+    const { mode, libelle, definition = null, promu_depuis = null,
+            quoi, ou, pourquoi } = req.body;
+    if (!mode || !libelle) {
+      return res.status(400).json({ error: 'mode et libelle requis' });
+    }
+    // Une promotion est une evolution des regles d'application : elle porte
+    // son quoi, son ou et son pourquoi comme toute evolution du manuel.
+    if (!quoi || !ou || !pourquoi) {
+      return res.status(400).json({
+        error: 'Toute promotion de mode doit porter son quoi, son ou et son pourquoi',
+        code: 'TROIS_QUESTIONS',
+      });
+    }
+
+    const resultat = await withTransaction(async (client) => {
+      const { rows } = await client.query(`
+        INSERT INTO bahyo_atelier_mode_registre
+          (mode, libelle, definition, promu_depuis, promu_le, promu_par,
+           quoi, ou, pourquoi, ordre)
+        VALUES ($1,$2,$3,$4,NOW(),$5,$6,$7,$8,
+                COALESCE((SELECT MAX(ordre) + 10 FROM bahyo_atelier_mode_registre
+                          WHERE mode <> 'autre'), 10))
+        ON CONFLICT (mode) DO UPDATE SET
+          libelle = EXCLUDED.libelle, definition = EXCLUDED.definition,
+          actif = TRUE
+        RETURNING *
+      `, [mode, libelle, definition, promu_depuis, req.user.id, quoi, ou, pourquoi]);
+
+      // Rebascule les entrees « autre » qui portaient ce libelle
+      let reclasses = 0;
+      if (promu_depuis) {
+        const { rowCount } = await client.query(`
+          UPDATE bahyo_atelier_mode_exclusion
+          SET mode = $1, libelle_propose = NULL
+          WHERE mode = 'autre' AND libelle_propose = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM bahyo_atelier_mode_exclusion m2
+              WHERE m2.groupe_id = bahyo_atelier_mode_exclusion.groupe_id
+                AND m2.mode = $1)
+        `, [mode, promu_depuis]);
+        reclasses = rowCount;
+      }
+      return { registre: rows[0], reclasses };
+    });
+
+    res.json(resultat);
+  } catch (err) {
+    console.error('[ATELIER] Erreur promotion mode:', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -682,18 +968,21 @@ router.post('/experiences/:id/passage-a3', async (req, res) => {
       const parTexte = new Map(noyaux.map(n => [n.texte.trim(), n.id]));
 
       for (const g of r.sortie_json.groupes) {
-        let perf = POTENTIELS.includes(g.potentiel_performatif) ? g.potentiel_performatif : 'atomise';
+        // Le prompt A3 v0.2 renvoie encore la cle potentiel_performatif ;
+        // sa semantique est exactement celle d'inscription_finalite.
+        const brut = g.inscription_finalite ?? g.potentiel_performatif;
+        let insc = INSCRIPTIONS.includes(brut) ? brut : 'atomise';
         // Application defensive du plafond latent
-        if (g.tiers_source === 'implicite' && perf === 'porte') perf = 'latent';
+        if (g.tiers_source === 'implicite' && insc === 'porte') insc = 'latent';
 
         const { rows: gr } = await query(`
           INSERT INTO bahyo_atelier_groupe
             (experience_id, tiers, tiers_source, finalite_exprimee,
-             potentiel_performatif, origine, proposition_assistant, statut,
+             inscription_finalite, origine, proposition_assistant, statut,
              version_manuel)
           VALUES ($1,$2,$3,$4,$5,'assistant',$6,'proposition',$7) RETURNING *
         `, [id, g.tiers ?? null, g.tiers_source ?? null,
-            g.finalite_exprimee ?? null, perf, g, vmanA3]);
+            g.finalite_exprimee ?? null, insc, g, vmanA3]);
 
         for (const nt of (g.noyaux || [])) {
           const nid = parTexte.get(String(nt).trim());
@@ -738,7 +1027,9 @@ router.post('/experiences/:id/passage-a3', async (req, res) => {
                          .map(n => ({ id: n.id, texte: n.texte }));
     }
 
-    res.json({ passage: passage[0], groupes: groupesCrees, noyaux_sans_groupe: sansGroupe });
+    const groupesDerives = await deriverGroupes(groupesCrees);
+    res.json({ passage: passage[0], groupes: groupesDerives,
+               noyaux_sans_groupe: sansGroupe });
   } catch (err) {
     console.error('[ATELIER] Erreur passage A3:', err.message);
     res.status(502).json({ error: `Assistant indisponible : ${err.message}` });
@@ -813,7 +1104,7 @@ router.post('/dialogue', async (req, res) => {
         const c = rows[0];
         // F.1 : l'assistant doit disposer du texte source COMPLET, des autres
         // noyaux de l'experience, des annotations deja posees et de la version
-        // de doctrine en vigueur.
+        // des regles d'application en vigueur.
         const [freres, posees] = await Promise.all([
           query(`SELECT texte FROM bahyo_atelier_noyau
                  WHERE experience_id = $1 AND id <> $2 ORDER BY rang`, [c.eid, c.nid]),
@@ -821,7 +1112,7 @@ router.post('/dialogue', async (req, res) => {
                  FROM bahyo_atelier_annotation WHERE noyau_id = $1 ORDER BY place`, [c.nid]),
         ]);
         const bloc = [
-          `Version de doctrine en vigueur : v${vman}`,
+          `Version des regles d'application en vigueur : v${vman}`,
           `Poste : ${c.poste}`,
           `Secteur : ${c.secteur}`,
           '',
@@ -979,7 +1270,7 @@ router.put('/manuel/:cle', async (req, res) => {
       const { rows: av } = await client.query(
         'SELECT * FROM bahyo_atelier_manuel WHERE section_cle = $1', [cle]);
 
-      // Version globale de doctrine : +1 a chaque evolution (B.7)
+      // Version globale des regles d'application : +1 a chaque evolution (B.7)
       const { rows: vc } = await client.query(
         "SELECT valeur FROM bahyo_config WHERE cle = 'atelier_manuel_version' FOR UPDATE");
       const vGlobale = (vc[0] ? parseInt(vc[0].valeur, 10) : 1) + 1;
@@ -1084,7 +1375,7 @@ router.get('/stats', async (req, res) => {
                (SELECT COUNT(*) FROM bahyo_atelier_manque)     AS manques`),
       query(`SELECT place, regime, COUNT(*) AS n FROM bahyo_atelier_annotation
              WHERE regime IS NOT NULL GROUP BY place, regime ORDER BY place, n DESC`),
-      query(`SELECT potentiel_performatif, statut, COUNT(*) AS n FROM bahyo_atelier_groupe
+      query(`SELECT inscription_finalite, statut, COUNT(*) AS n FROM bahyo_atelier_groupe
              GROUP BY 1,2 ORDER BY n DESC`),
       query(`SELECT type_manque, COUNT(*) AS n FROM bahyo_atelier_manque
              GROUP BY 1 ORDER BY n DESC LIMIT 12`),
@@ -1094,7 +1385,7 @@ router.get('/stats', async (req, res) => {
     res.json({
       global: global.rows[0],
       par_regime: parRegime.rows,
-      par_potentiel: parPerf.rows,
+      par_inscription: parPerf.rows,
       top_manques: manques.rows,
       ecarts_assistant: parseInt(ecarts.rows[0].n, 10),
     });

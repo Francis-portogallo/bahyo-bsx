@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/test_atelier.js
-// @version 1.0.0
-// @date    2026-09-17
+// @version 1.1.0
+// @date    2026-09-22
 // Test d'integration de l'atelier : frappe les VRAIES routes HTTP en production
 // et verifie la persistance en relisant depuis l'API.
 //
@@ -104,7 +104,10 @@ async function main() {
   const ref = await GET('/atelier/referentiel');
   check('GET /atelier/referentiel', ref.status === 200, `HTTP ${ref.status}`);
   check('vocabulaire regimes', ref.data?.regimes?.includes('constatif'));
-  check('vocabulaire potentiels', ref.data?.potentiels_performatifs?.join(',') === 'porte,latent,atomise');
+  check('vocabulaire inscriptions', ref.data?.inscriptions_finalite?.join(',') === 'porte,latent,atomise');
+  check('registre des modes d exclusion',
+        (ref.data?.modes_exclusion || []).some(m => m.mode === 'objet_sans_rarete'),
+        (ref.data?.modes_exclusion || []).map(m => m.mode).join(', '));
 
   const sansJeton = await fetch(BASE + '/atelier/referentiel');
   check('refus sans jeton', sansJeton.status === 401 || sansJeton.status === 403,
@@ -303,7 +306,7 @@ async function main() {
   // Regle du plafond latent, testable sans IA
   const plafond = await POST('/atelier/groupes', {
     experience_id: T.expId, tiers: 'implicite', tiers_source: 'implicite',
-    potentiel_performatif: 'porte',
+    inscription_finalite: 'porte',
   });
   check('REFUS plafond latent (implicite ne peut pas porter)',
         plafond.status === 400 && plafond.data?.code === 'PLAFOND_LATENT',
@@ -312,8 +315,9 @@ async function main() {
   const gOk = await POST('/atelier/groupes', {
     experience_id: T.expId, tiers: 'TEST-Renault', tiers_source: 'explicite',
     finalite_exprimee: 'TEST — deploiement de la methode sur la chaine',
-    potentiel_performatif: 'porte', noyau_ids: [T.noyauId],
+    inscription_finalite: 'porte', noyau_ids: [T.noyauId],
     libelle: 'TEST — BS composite', justification: 'test d agglomeration',
+    champ_pratique: 'TEST-pratique',
   });
   check('POST groupe manuel', gOk.status === 200, `HTTP ${gOk.status}`);
   if (gOk.data?.groupe?.id) T.groupeIds.push(gOk.data.groupe.id);
@@ -323,6 +327,11 @@ async function main() {
   check('PERSISTANCE groupe', !!gTrouve);
   check('noyau rattache au groupe', (gTrouve?.noyau_ids || []).includes(T.noyauId));
   check('finalite persistee', (gTrouve?.finalite_exprimee || '').includes('deploiement'));
+  check('champ_pratique persiste', gTrouve?.champ_pratique === 'TEST-pratique');
+  check('DERIVE : sans exclusion => potentiellement performatif',
+        gTrouve?.potentiellement_performatif === true);
+  check('modes_exclusion present et vide',
+        Array.isArray(gTrouve?.modes_exclusion) && gTrouve.modes_exclusion.length === 0);
 
   const gMaj = await PATCH('/atelier/groupes/' + T.groupeIds[0],
                            { libelle: 'TEST — BS composite renomme', statut: 'valide' });
@@ -359,8 +368,95 @@ async function main() {
     check('groupes proposes', cres.length > 0, `${cres.length} groupe(s)`);
     check('origine = assistant', cres.every(g => g.origine === 'assistant'));
     check('plafond latent applique par le serveur',
-          cres.every(g => !(g.tiers_source === 'implicite' && g.potentiel_performatif === 'porte')));
+          cres.every(g => !(g.tiers_source === 'implicite' && g.inscription_finalite === 'porte')));
     cres.forEach(g => T.groupeIds.push(g.id));
+  }
+
+  // ── 6bis. P.5 — Modes d'exclusion (specification du 22/09/2026) ───────────
+  titre('6bis. Modes d exclusion et derivation');
+  const gid = T.groupeIds[0];
+
+  const exVide = await POST(`/atelier/groupes/${gid}/exclusions`,
+                            { mode: 'objet_sans_rarete', justification: 'court' });
+  check('REFUS justification trop courte',
+        exVide.status === 400 && exVide.data?.code === 'JUSTIFICATION_REQUISE',
+        `HTTP ${exVide.status}`);
+
+  const exAutre = await POST(`/atelier/groupes/${gid}/exclusions`,
+    { mode: 'autre', justification: 'Un mode non prevu au registre est rencontre ici.' });
+  check('REFUS mode « autre » sans libelle',
+        exAutre.status === 400 && exAutre.data?.code === 'LIBELLE_REQUIS',
+        `HTTP ${exAutre.status}`);
+
+  const exInc = await POST(`/atelier/groupes/${gid}/exclusions`,
+    { mode: 'mode_imaginaire', justification: 'Ce mode n existe pas au registre.' });
+  check('REFUS mode inconnu du registre',
+        exInc.status === 400 && exInc.data?.code === 'MODE_INCONNU');
+
+  const ex1 = await POST(`/atelier/groupes/${gid}/exclusions`, {
+    mode: 'objet_sans_rarete',
+    justification: 'TEST — la distribution d eau potable est universellement disponible.',
+  });
+  check('POST exclusion objet_sans_rarete', ex1.status === 200, `HTTP ${ex1.status}`);
+  check('DERIVE : une exclusion => NON valorisable',
+        ex1.data?.groupe?.potentiellement_performatif === false);
+
+  // Plusieurs modes simultanement (P.5)
+  const ex2 = await POST(`/atelier/groupes/${gid}/exclusions`, {
+    mode: 'autre', libelle_propose: 'TEST-objet sous monopole public',
+    justification: 'TEST — second mode pour verifier le cumul.',
+  });
+  check('POST second mode simultane', ex2.status === 200);
+  check('cumul de modes sur un groupe',
+        (ex2.data?.groupe?.modes_exclusion || []).length === 2,
+        `${ex2.data?.groupe?.modes_exclusion?.length} mode(s)`);
+
+  const regEx = await GET('/atelier/exclusions/registre');
+  check('GET registre des modes', regEx.status === 200,
+        `${regEx.data?.registre?.length} mode(s) au registre`);
+  check('candidats a promotion listes (4.4)',
+        (regEx.data?.candidats_promotion || [])
+          .some(x => (x.libelle_propose || '').startsWith('TEST-')),
+        (regEx.data?.candidats_promotion || []).map(x => `${x.n}x ${x.libelle_propose}`).join(' | '));
+
+  // Retrait : la derivation doit repasser a vrai
+  const idEx1 = (ex2.data?.groupe?.modes_exclusion || [])
+    .find(m => m.mode === 'objet_sans_rarete')?.id;
+  const idEx2 = (ex2.data?.groupe?.modes_exclusion || [])
+    .find(m => m.mode === 'autre')?.id;
+  if (idEx1) await DEL('/atelier/exclusions/' + idEx1);
+  if (idEx2) {
+    const supp = await DEL('/atelier/exclusions/' + idEx2);
+    check('DERIVE : zero exclusion => redevient performatif',
+          supp.data?.groupe?.potentiellement_performatif === true);
+  }
+
+  // 4.6 — atomise ajoute automatiquement sans_chaine_finalite
+  const gAtom = await POST('/atelier/groupes', {
+    experience_id: T.expId, tiers: 'TEST-atomise', tiers_source: 'explicite',
+    inscription_finalite: 'atomise', noyau_ids: [T.noyauId],
+  });
+  check('POST groupe atomise', gAtom.status === 200, `HTTP ${gAtom.status}`);
+  if (gAtom.data?.groupe?.id) T.groupeIds.push(gAtom.data.groupe.id);
+  const modesAtom = (gAtom.data?.groupe?.modes_exclusion || []).map(m => m.mode);
+  check('4.6 : atomise ajoute sans_chaine_finalite automatiquement',
+        modesAtom.includes('sans_chaine_finalite'), modesAtom.join(', ') || 'aucun');
+  check('4.6 : pose_par = systeme',
+        (gAtom.data?.groupe?.modes_exclusion || [])
+          .find(m => m.mode === 'sans_chaine_finalite')?.pose_par === 'systeme');
+  check('DERIVE : atomise => non valorisable',
+        gAtom.data?.groupe?.potentiellement_performatif === false);
+
+  // Le retrait manuel signale l'incoherence sans bloquer
+  const idAuto = (gAtom.data?.groupe?.modes_exclusion || [])
+    .find(m => m.mode === 'sans_chaine_finalite')?.id;
+  if (idAuto) {
+    const rem = await DEL('/atelier/exclusions/' + idAuto);
+    check('retrait permis, incoherence SIGNALEE sans blocage',
+          rem.status === 200 && !!rem.data?.avertissement,
+          rem.data?.avertissement ? 'avertissement emis' : 'aucun avertissement');
+    check('incoherence_atomise remontee',
+          rem.data?.groupe?.incoherence_atomise === true);
   }
 
   // ── 7. Catalogue et stats ──────────────────────────────────────────────────
@@ -458,6 +554,14 @@ async function main() {
   check('historique inclus dans l export', Array.isArray(a0?.historique),
         `${a0?.historique?.length ?? '—'} version(s)`);
 
+  const gExp = e0?.groupes_a3?.[0];
+  check('schema §6 — groupe avec les deux axes', !!gExp
+    && 'inscription_finalite' in gExp && 'modes_exclusion' in gExp
+    && 'potentiellement_performatif' in gExp && 'champ_pratique' in gExp);
+  check('derivation coherente a l export',
+        (e0?.groupes_a3 || []).every(g =>
+          g.potentiellement_performatif === ((g.modes_exclusion || []).length === 0)));
+
   const d0 = e0?.dialogues?.[0];
   check('schema L.2 — dialogue avec tours', !!d0 && Array.isArray(d0.tours)
     && d0.tours.length >= 2, `${d0?.tours?.length} tours`);
@@ -491,6 +595,8 @@ async function main() {
                  WHERE noyau_id = $1 AND annotateur_id = $2
                    AND (identification LIKE 'TEST%' OR commentaire LIKE '%test%')`,
                 [T.noyauId, T.userId]);
+    await query(`DELETE FROM bahyo_atelier_mode_exclusion
+                 WHERE justification LIKE 'TEST%' OR libelle_propose LIKE 'TEST-%'`);
     await query(`DELETE FROM bahyo_atelier_manuel_version WHERE section_cle = 'test-recette'`);
     await query(`DELETE FROM bahyo_atelier_manuel WHERE section_cle = 'test-recette'`);
     await query(`UPDATE bahyo_atelier_noyau SET statut_orphelin = NULL WHERE id = $1`,

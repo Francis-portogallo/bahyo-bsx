@@ -37,9 +37,11 @@ CHAMPS_ANNOTATION = [
 ]
 CHAMPS_GROUPE = [
     "id_groupe", "tiers", "tiers_source", "noyaux_membres",
-    "finalite_exprimee", "potentiel_performatif", "nom_bs_composite",
+    "finalite_exprimee", "inscription_finalite", "modes_exclusion",
+    "potentiellement_performatif", "nom_bs_composite",
     "annotateur", "horodatage",
 ]
+CHAMPS_MODE_EXCLUSION = ["mode", "justification", "annotateur", "horodatage"]
 CHAMPS_DIALOGUE = [
     "id_dialogue", "contexte", "place", "type_dialogue", "tours",
     "resultat", "documents_consultes",
@@ -54,7 +56,8 @@ VOCAB = {
     "place": {"A1", "A2", "A3"},
     "regime": {"declaratif", "constatif", "orphelin", None},
     "sous_type": {"fonctionnel", "relationnel", "autre", None},
-    "potentiel_performatif": {"porte", "latent", "atomise", None},
+    "inscription_finalite": {"porte", "latent", "atomise", None},
+    "mode_exclusion": {"objet_sans_rarete", "sans_chaine_finalite", "autre"},
     "tiers_source": {"explicite", "implicite", None},
     "categorie": {"sans_seme", "avec_tiers_seul", "riche", None},
     "statut_experience": {"nouveau", "en_cours", "annote", "a_revoir"},
@@ -90,7 +93,10 @@ def verifier(doc, verbeux=False):
     c = Counter()
     par_place = Counter()
     par_regime = Counter()
-    par_potentiel = Counter()
+    par_inscription = Counter()
+    par_mode_exclusion = Counter()
+    libelles_autre = Counter()
+    champs_pratique = Counter()
     par_type_manque = Counter()
     par_statut_exp = Counter()
     questions_biocraft = defaultdict(set)
@@ -162,7 +168,7 @@ def verifier(doc, verbeux=False):
                           f"(fonctionnel / relationnel attendu)")
                 if a.get("ecart_assistant") and not (a.get("ecart_explication") or "").strip():
                     pb(f"{ref_a} : ecart avec l'assistant NON explicite "
-                       f"— contraire a la doctrine (F.3)")
+                       f"— contraire aux regles d'application (F.3)")
                 if a.get("ecart_assistant"):
                     c["annotations_avec_ecart"] += 1
 
@@ -183,19 +189,65 @@ def verifier(doc, verbeux=False):
             ref_g = f"{ref_e} / groupe {g.get('id_groupe', '?')}"
             champs_manquants(g, CHAMPS_GROUPE, ref_g)
             c["groupes"] += 1
-            par_potentiel[g.get("potentiel_performatif")] += 1
+            par_inscription[g.get("inscription_finalite")] += 1
 
-            if g.get("potentiel_performatif") not in VOCAB["potentiel_performatif"]:
-                pb(f"{ref_g} : potentiel_performatif invalide "
-                   f"'{g.get('potentiel_performatif')}'")
+            if g.get("inscription_finalite") not in VOCAB["inscription_finalite"]:
+                pb(f"{ref_g} : inscription_finalite invalide "
+                   f"'{g.get('inscription_finalite')}'")
             if g.get("tiers_source") not in VOCAB["tiers_source"]:
                 pb(f"{ref_g} : tiers_source invalide '{g.get('tiers_source')}'")
 
-            # P.3 — plafond latent pour tiers implicite
+            # P.3 — plafond latent pour tiers implicite, porte desormais
+            # sur inscription_finalite
             if g.get("tiers_source") == "implicite" and \
-               g.get("potentiel_performatif") == "porte":
-                pb(f"{ref_g} : VIOLATION DOCTRINALE — tiers implicite "
+               g.get("inscription_finalite") == "porte":
+                pb(f"{ref_g} : VIOLATION DU FORMALISME — tiers implicite "
                    f"annote 'porte' (plafond 'latent' du prompt A3 v0.2)")
+
+            # ── P.5 — modes d'exclusion (specification du 22/09/2026) ──────
+            modes_g = g.get("modes_exclusion")
+            if modes_g is None:
+                pb(f"{ref_g} : cle 'modes_exclusion' ABSENTE")
+                modes_g = []
+            noms_modes = []
+            for m in modes_g:
+                ref_m = f"{ref_g} / mode {m.get('mode', '?')}"
+                champs_manquants(m, CHAMPS_MODE_EXCLUSION, ref_m)
+                nom = m.get("mode")
+                noms_modes.append(nom)
+                c["modes_exclusion"] += 1
+                par_mode_exclusion[nom] += 1
+                if nom not in VOCAB["mode_exclusion"]:
+                    avert(f"{ref_m} : mode hors du jeu initial — promotion "
+                          f"enregistree au registre ?")
+                if not (m.get("justification") or "").strip():
+                    pb(f"{ref_m} : justification absente — exigee pour chaque mode")
+                if nom == "autre":
+                    lp = (m.get("libelle_propose") or "").strip()
+                    if not lp:
+                        pb(f"{ref_m} : mode 'autre' sans libelle_propose")
+                    else:
+                        libelles_autre[lp] += 1
+
+            # 4.5 — derivation : potentiellement_performatif = (modes vide)
+            pp = g.get("potentiellement_performatif")
+            attendu = len(modes_g) == 0
+            if pp is None:
+                pb(f"{ref_g} : potentiellement_performatif ABSENT (champ derive attendu)")
+            elif pp != attendu:
+                pb(f"{ref_g} : potentiellement_performatif={pp} INCOHERENT avec "
+                   f"{len(modes_g)} mode(s) d'exclusion (attendu {attendu})")
+            elif pp:
+                c["groupes_potentiellement_performatifs"] += 1
+
+            # 4.6 — atomise implique sans_chaine_finalite
+            if g.get("inscription_finalite") == "atomise" \
+               and "sans_chaine_finalite" not in noms_modes:
+                pb(f"{ref_g} : inscription 'atomise' sans le mode "
+                   f"'sans_chaine_finalite' (regle 4.6)")
+
+            if g.get("champ_pratique"):
+                champs_pratique[g["champ_pratique"]] += 1
 
             # L.5 — coherence referentielle
             for nid in g.get("noyaux_membres", []):
@@ -257,7 +309,10 @@ def verifier(doc, verbeux=False):
         "compteurs": c,
         "par_place": par_place,
         "par_regime": par_regime,
-        "par_potentiel": par_potentiel,
+        "par_inscription": par_inscription,
+        "par_mode_exclusion": par_mode_exclusion,
+        "libelles_autre": libelles_autre,
+        "champs_pratique": champs_pratique,
         "par_type_manque": par_type_manque,
         "par_statut_exp": par_statut_exp,
         "questions_biocraft": questions_biocraft,
@@ -321,17 +376,30 @@ def main():
     print("  COMPTAGES (L.6)")
     print("-" * 70)
     for cle in ["experiences", "noyaux", "annotations", "revisions_archivees",
-                "groupes", "dialogues", "tours", "manques",
+                "groupes", "groupes_potentiellement_performatifs",
+                "modes_exclusion", "dialogues", "tours", "manques",
                 "manques_avec_question", "annotations_avec_ecart"]:
         print(f"    {cle:<28} {c[cle]:>6}")
 
     bloc("Annotations par place", res["par_place"], c["annotations"] or None)
     bloc("Annotations par regime", res["par_regime"], c["annotations"] or None)
-    bloc("Groupes par potentiel performatif", res["par_potentiel"], c["groupes"] or None)
+    bloc("Groupes par inscription dans la finalite", res["par_inscription"], c["groupes"] or None)
+    bloc("Modes d'exclusion constates", res["par_mode_exclusion"])
     bloc("Experiences par statut", res["par_statut_exp"], c["experiences"] or None)
     bloc("Manques par type", res["par_type_manque"], c["manques"] or None)
     bloc("Annotateurs", res["annotateurs"])
-    bloc("Versions de manuel referencees", res["versions_manuel"])
+    bloc("Versions des regles d'application referencees", res["versions_manuel"])
+    if res["champs_pratique"]:
+        bloc("Champs de pratique", res["champs_pratique"])
+
+    # 4.4 — les libelles 'autre' recurrents meritent une promotion
+    if res["libelles_autre"]:
+        print("\n" + "-" * 70)
+        print("  MODES 'AUTRE' CANDIDATS A LA PROMOTION")
+        print("-" * 70)
+        for lib, n in res["libelles_autre"].most_common():
+            marque = "  <-- recurrent" if n >= 3 else ""
+            print(f"    {n:>3}x  {lib}{marque}")
 
     # Le repertoire des questions — la matiere d'entrainement de BioCraft
     qb = res["questions_biocraft"]
