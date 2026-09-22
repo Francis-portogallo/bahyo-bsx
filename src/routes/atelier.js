@@ -1,7 +1,11 @@
 // src/routes/atelier.js
-// @version 1.2.0
+// @version 1.3.0
 // @date    2026-09-22
-// @change  1.2.0 — specification_modes_exclusion.md v1.0 :
+// @change  1.3.0 — Instrumentation du geste : journal d'actes observables
+//                  (sections du formalisme lues, cas similaires deplies,
+//                  assistant sollicite, ordre de traversee, durees).
+//                  Contraindre la traversee, jamais la conclusion.
+//          1.2.0 — specification_modes_exclusion.md v1.0 :
 //                  potentiel_performatif -> inscription_finalite (renommage),
 //                  modes d'exclusion (table dediee), potentiellement_performatif
 //                  DERIVE et jamais saisi, champ_pratique, registre des modes.
@@ -114,6 +118,26 @@ async function deriverGroupes(groupes) {
   });
 }
 
+// ── Instrumentation du geste ─────────────────────────────────────────────────
+// Consigne un acte observable. Volontairement silencieux en cas d'echec :
+// l'instrumentation ne doit jamais faire echouer une annotation.
+async function observer(req, acte, { experience_id = null, noyau_id = null,
+                                     groupe_id = null, place = null,
+                                     detail = null } = {}) {
+  try {
+    await query(`
+      INSERT INTO bahyo_atelier_observation
+        (annotateur_id, experience_id, noyau_id, groupe_id, place, acte,
+         detail, session_cle)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `, [req.user.id, experience_id, noyau_id, groupe_id, place, acte,
+        detail ? JSON.stringify(detail) : null,
+        req.headers['x-session-atelier'] || null]);
+  } catch (err) {
+    console.warn('[ATELIER] observation non consignee :', err.message);
+  }
+}
+
 // Recalcule le statut d'une experience depuis l'etat reel de ses annotations.
 // N'ecrase jamais un 'a_revoir' pose a la main (M.3).
 async function majStatutExperience(expId) {
@@ -192,6 +216,95 @@ router.get('/referentiel', async (req, res) => {
 
 // Sous-routeur d'export (Partie L du cahier de recette)
 router.use('/export', exportRoutes);
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  OBSERVATION DU GESTE
+//
+//  Le schema d'annotation etait systematique, la traversee ne l'etait pas.
+//  On consigne ce qui a ete reellement fait — sans rien bloquer ni orienter.
+//
+//  N'est consigne que ce qui est VERIFIABLE. La lecture du texte source ne
+//  l'est pas (le panneau est toujours affiche) : elle n'est donc pas
+//  enregistree, plutot que de produire une donnee fictive.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /atelier/observations — lot d'actes, sans attente de reponse utile
+router.post('/observations', async (req, res) => {
+  try {
+    const actes = Array.isArray(req.body?.actes) ? req.body.actes : [req.body];
+    let n = 0;
+    for (const a of actes) {
+      if (!a?.acte) continue;
+      await observer(req, a.acte, {
+        experience_id: a.experience_id || null,
+        noyau_id: a.noyau_id || null,
+        groupe_id: a.groupe_id || null,
+        place: a.place || null,
+        detail: a.detail || null,
+      });
+      n++;
+    }
+    res.json({ consignes: n });
+  } catch (err) {
+    console.error('[ATELIER] Erreur observations:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /atelier/parcours/:noyauId — le parcours reconstitue d'un noyau
+router.get('/parcours/:noyauId', async (req, res) => {
+  try {
+    const [synthese, actes] = await Promise.all([
+      query('SELECT * FROM bahyo_atelier_parcours WHERE noyau_id = $1',
+            [req.params.noyauId]),
+      query(`SELECT acte, place, detail, created_at
+             FROM bahyo_atelier_observation
+             WHERE noyau_id = $1 ORDER BY created_at`, [req.params.noyauId]),
+    ]);
+    res.json({ parcours: synthese.rows[0] || null, actes: actes.rows });
+  } catch (err) {
+    console.error('[ATELIER] Erreur parcours:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// GET /atelier/parcours — regularite d'ensemble : c'est ici qu'on lit si le
+// geste est systematique, ou s'il derive.
+router.get('/parcours', async (req, res) => {
+  try {
+    const [global, parActe, parSection, sansConsultation] = await Promise.all([
+      query(`SELECT COUNT(*) AS noyaux_traites,
+                    ROUND(AVG(duree_s)::numeric, 1)      AS duree_moyenne_s,
+                    ROUND(STDDEV(duree_s)::numeric, 1)   AS duree_ecart_type,
+                    ROUND(AVG(n_similaires)::numeric, 2) AS similaires_moyen,
+                    ROUND(AVG(n_propositions)::numeric, 2) AS propositions_moyen,
+                    ROUND(AVG(n_tours)::numeric, 2)      AS tours_moyen,
+                    ROUND(AVG(n_manques)::numeric, 2)    AS manques_moyen
+             FROM bahyo_atelier_parcours WHERE conclu_a IS NOT NULL`),
+      query(`SELECT acte, COUNT(*) AS n FROM bahyo_atelier_observation
+             GROUP BY acte ORDER BY n DESC`),
+      query(`SELECT detail->>'section_cle' AS section, COUNT(*) AS n
+             FROM bahyo_atelier_observation
+             WHERE acte = 'formalisme_section' AND detail->>'section_cle' IS NOT NULL
+             GROUP BY 1 ORDER BY n DESC`),
+      // Les cas conclus sans avoir rien consulte : ni signal d'alarme ni
+      // reproche, mais un indicateur de regularite a regarder.
+      query(`SELECT COUNT(*) AS n FROM bahyo_atelier_parcours
+             WHERE conclu_a IS NOT NULL
+               AND n_similaires = 0 AND n_propositions = 0
+               AND n_tours = 0 AND n_formalisme = 0`),
+    ]);
+    res.json({
+      global: global.rows[0],
+      par_acte: parActe.rows,
+      sections_du_formalisme: parSection.rows,
+      conclus_sans_consultation: parseInt(sansConsultation.rows[0].n, 10),
+    });
+  } catch (err) {
+    console.error('[ATELIER] Erreur parcours global:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CORPUS
@@ -418,6 +531,12 @@ router.post('/noyaux/:id/annotation', async (req, res) => {
       'SELECT experience_id FROM bahyo_atelier_noyau WHERE id = $1', [id]);
     if (ex[0]) await majStatutExperience(ex[0].experience_id);
 
+    await observer(req, 'annotation_enregistree', {
+      noyau_id: id, experience_id: ex[0]?.experience_id, place,
+      detail: { statut, regime, ecart: !!ecart_assistant,
+                revision: rows[0].revision },
+    });
+
     res.json({ annotation: rows[0] });
   } catch (err) {
     console.error('[ATELIER] Erreur annotation upsert:', err.message);
@@ -451,6 +570,12 @@ router.post('/manques', async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
     `, [noyau_id, experience_id, place, type_manque, description,
         question_type, criticite, detecte_par, req.user.id]);
+
+    await observer(req, 'manque_signale', {
+      noyau_id, experience_id, place,
+      detail: { type_manque, criticite, detecte_par,
+                avec_question: !!question_type },
+    });
 
     res.json({ manque: rows[0] });
   } catch (err) {
@@ -739,6 +864,13 @@ router.post('/groupes/:id/exclusions', async (req, res) => {
     const { rows: g } = await query(
       'SELECT * FROM bahyo_atelier_groupe WHERE id = $1', [req.params.id]);
     const [enrichi] = await deriverGroupes(g);
+
+    await observer(req, 'exclusion_posee', {
+      groupe_id: req.params.id, experience_id: g[0]?.experience_id,
+      detail: { mode, pose_par, libelle_propose,
+                potentiellement_performatif: enrichi.potentiellement_performatif },
+    });
+
     res.json({ exclusion: rows[0], groupe: enrichi });
   } catch (err) {
     console.error('[ATELIER] Erreur exclusion create:', err.message);
@@ -1076,6 +1208,12 @@ router.post('/noyaux/:id/proposition-a1', async (req, res) => {
     `, [id, r.modele, r.sortie_brute, r.sortie_json, r.statut,
         r.duree_s, r.tokens_in, r.tokens_out]);
 
+    await observer(req, 'proposition_demandee', {
+      noyau_id: id, place: 'A1',
+      detail: { statut: r.statut, confiance: r.sortie_json?.confiance,
+                cas_similaires: similaires.length },
+    });
+
     res.json({ proposition: r.sortie_json, statut: r.statut, brut: r.sortie_brute, cas_similaires: similaires });
   } catch (err) {
     console.error('[ATELIER] Erreur proposition A1:', err.message);
@@ -1171,6 +1309,11 @@ router.post('/dialogue', async (req, res) => {
       VALUES ($1,$2,$3,$4,'assistant','avec_annotateur',$5,$6,$7,$8,$9,$10)
     `, [experience_id, noyau_id, groupe_id, place, registre, r.contenu, r.modele,
         vman, tourBase + 2, JSON.stringify(docsConsultes)]);
+
+    await observer(req, 'dialogue_tour', {
+      noyau_id, experience_id, groupe_id, place,
+      detail: { tour: tourBase + 2, modele: r.modele, duree_s: r.duree_s },
+    });
 
     res.json({ reponse: r.contenu, modele: r.modele, duree_s: r.duree_s,
                version_manuel: vman, documents_consultes: docsConsultes });

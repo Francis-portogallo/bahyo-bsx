@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/seed_manuel.js
-// @version 1.2.0
+// @version 1.3.0
 // @date    2026-09-22
 // Amorce le manuel vivant de l'atelier avec le FORMALISME 3A et ses REGLES
 // D'APPLICATION, issus de complement_transmission_atelier.md (partie 1), du
@@ -371,6 +371,60 @@ Toute évolution de ce manuel doit porter :
 
 L'atelier REFUSE une modification du manuel qui ne porte pas ces trois
 informations.`,
+  },
+  {
+    cle: 'regularite-du-geste',
+    titre: 'La régularité du geste, et ce qui en est observé',
+    ordre: 120,
+    contenu: `Le formalisme est systématique. Votre traversée doit l'être aussi.
+
+CE QUE DEMANDE LE PROCESSUS
+Le même noyau doit être qualifié de la même manière deux fois à un mois
+d'intervalle, quel que soit le contexte du moment. Cela ne s'obtient pas par
+bonne volonté : la dérive est lente et ne se voit pas de l'intérieur.
+
+L'ATELIER OBSERVE, IL NE CONTRAINT PAS
+Le principe est simple : contraindre la traversée, jamais la conclusion. Vous
+restez souverain sur le jugement — c'est constitutif du couple AA. Mais le
+chemin par lequel vous y arrivez est consigné, pour que sa régularité soit
+mesurable.
+
+CE QUI EST CONSIGNÉ
+- les sections de ce manuel que vous ouvrez, et vos recherches dedans
+- les cas similaires que vous dépliez
+- les propositions demandées à l'assistant
+- les tours de dialogue
+- l'ordre dans lequel vous traversez A₁, A₂, A₃
+- le temps écoulé entre l'ouverture d'un noyau et sa conclusion
+
+CE QUI N'EST PAS CONSIGNÉ
+La lecture du texte source. Le panneau est affiché en permanence : en inférer
+la lecture serait une fiction. Or une fiction dans les données d'entraînement
+est pire qu'une absence — elle enseignerait quelque chose de faux.
+
+On préfère donc une observation partielle et vraie à une observation complète
+et inventée. Le même principe vaut pour toute extension future de
+l'instrumentation.
+
+POURQUOI C'EST AUSSI UTILE AU MODÈLE
+Un exemple qui porte « l'annotateur a consulté telle section, sollicité
+l'assistant, puis divergé pour cette raison » enseigne bien davantage que
+l'annotation nue. Le parcours fait partie de ce qui se transmet.
+
+OÙ LE LIRE
+L'onglet « Régularité » présente ces chiffres. Ils ne jugent rien. Un
+écart-type des durées du même ordre que la moyenne signale une traversée
+irrégulière — sans dire laquelle est la bonne. Des cas conclus sans rien
+consulter ne sont pas une faute : sur un cas évident, c'est légitime. Ils
+deviennent un signal quand leur proportion grandit.
+
+UNE MISE EN GARDE
+Être systématique n'est pas être correct. Un annotateur régulier mais mal
+calibré produit un corpus parfaitement cohérent qui enseigne la mauvaise
+chose — et aucune mesure de régularité ne le verra, puisqu'elle mesure
+l'accord avec soi, pas avec le formalisme. Seule la confrontation périodique
+aux cas d'école, dont la qualification est établie par ailleurs, rattrape
+cela. La régularité est nécessaire ; elle ne suffit pas.`,
   },
   {
     cle: 'rigueur',

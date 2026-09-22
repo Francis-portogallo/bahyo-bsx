@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/test_atelier.js
-// @version 1.1.0
+// @version 1.2.0
 // @date    2026-09-22
 // Test d'integration de l'atelier : frappe les VRAIES routes HTTP en production
 // et verifie la persistance en relisant depuis l'API.
@@ -468,6 +468,48 @@ async function main() {
           && remis.data?.groupe?.incoherence_atomise === false);
   }
 
+  // ── 6ter. Instrumentation du geste ────────────────────────────────────────
+  titre('6ter. Instrumentation du geste');
+
+  const obs = await POST('/atelier/observations', { actes: [
+    { acte: 'noyau_ouvert',        noyau_id: T.noyauId, experience_id: T.expId, place: 'A1' },
+    { acte: 'formalisme_ouvert',   noyau_id: T.noyauId, place: 'A1' },
+    { acte: 'formalisme_section',  noyau_id: T.noyauId, place: 'A1',
+      detail: { section_cle: 'declaratif-constatif' } },
+    { acte: 'similaires_consultes', noyau_id: T.noyauId, place: 'A1', detail: { n: 3 } },
+  ]});
+  check('POST observations (lot)', obs.status === 200 && obs.data?.consignes === 4,
+        `${obs.data?.consignes} acte(s) consigne(s)`);
+
+  const parc = await GET('/atelier/parcours/' + T.noyauId);
+  check('GET parcours du noyau', parc.status === 200);
+  check('actes restitues dans l ordre', (parc.data?.actes?.length || 0) >= 4,
+        `${parc.data?.actes?.length} acte(s)`);
+  check('section du formalisme tracee',
+        (parc.data?.parcours?.sections_lues || []).includes('declaratif-constatif'),
+        (parc.data?.parcours?.sections_lues || []).join(', '));
+  check('proposition et dialogue consignes cote serveur',
+        (+parc.data?.parcours?.n_propositions || 0) + (+parc.data?.parcours?.n_tours || 0) > 0
+        || !AVEC_IA,
+        `${parc.data?.parcours?.n_propositions} proposition(s), `
+        + `${parc.data?.parcours?.n_tours} tour(s)`);
+  check('annotation enregistree tracee',
+        (+parc.data?.parcours?.n_enregistrements || 0) > 0,
+        `${parc.data?.parcours?.n_enregistrements} enregistrement(s)`);
+  check('ordre de traversee restitue',
+        Array.isArray(parc.data?.parcours?.ordre_places),
+        (parc.data?.parcours?.ordre_places || []).join(' -> '));
+
+  const parcG = await GET('/atelier/parcours');
+  check('GET regularite globale', parcG.status === 200,
+        `${parcG.data?.global?.noyaux_traites} noyau(x) conclu(s)`);
+  check('actes agreges par type', (parcG.data?.par_acte?.length || 0) > 0,
+        (parcG.data?.par_acte || []).slice(0, 4).map(a => `${a.acte}:${a.n}`).join(' '));
+
+  const obsVide = await POST('/atelier/observations', { actes: [{ sans_acte: true }] });
+  check('acte sans nom ignore sans erreur',
+        obsVide.status === 200 && obsVide.data?.consignes === 0);
+
   // ── 7. Catalogue et stats ──────────────────────────────────────────────────
   titre('7. Catalogue et tableau de bord');
   const cat = await GET('/atelier/catalogue?place=A1');
@@ -555,6 +597,11 @@ async function main() {
   const n0 = e0?.noyaux?.[0];
   check('schema L.2 — noyau', !!n0 && 'marquages_decoupeur' in n0
     && 'version_decoupeur' in n0 && 'rang_dans_description' in n0);
+  check('parcours joint au noyau', 'parcours' in (n0 || {}));
+  const nParc = (e0?.noyaux || []).find(x => x.parcours);
+  check('parcours renseigne sur le noyau travaille', !!nParc,
+        nParc ? `${nParc.parcours.duree_s}s, `
+              + `${nParc.parcours.sections_formalisme_lues.length} section(s)` : '');
 
   const a0 = e0?.noyaux?.flatMap(n => n.annotations || [])
                   .find(a => a.place === 'A1');
@@ -610,6 +657,8 @@ async function main() {
                  WHERE noyau_id = $1 AND annotateur_id = $2
                    AND (identification LIKE 'TEST%' OR commentaire LIKE '%test%')`,
                 [T.noyauId, T.userId]);
+    await query(`DELETE FROM bahyo_atelier_observation WHERE noyau_id = $1
+                 AND annotateur_id = $2`, [T.noyauId, T.userId]);
     await query(`DELETE FROM bahyo_atelier_mode_exclusion
                  WHERE justification LIKE 'TEST%' OR libelle_propose LIKE 'TEST-%'`);
     await query(`DELETE FROM bahyo_atelier_manuel_version WHERE section_cle = 'test-recette'`);

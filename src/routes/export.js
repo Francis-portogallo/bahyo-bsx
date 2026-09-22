@@ -1,7 +1,10 @@
 // src/routes/export.js
-// @version 1.1.0
+// @version 1.2.0
 // @date    2026-09-22
-// @change  1.1.0 — specification_modes_exclusion.md §6 : inscription_finalite,
+// @change  1.2.0 — Le parcours de l'annotateur accompagne chaque annotation :
+//                  ce qui a ete consulte avant de conclure fait partie de ce
+//                  qui s'enseigne.
+//          1.1.0 — specification_modes_exclusion.md §6 : inscription_finalite,
 //                  modes_exclusion, potentiellement_performatif (derive a
 //                  l'export, jamais stocke), champ_pratique.
 //          1.0.0 — Export vers le SLM, conforme au schema de la Partie L.2 du
@@ -40,7 +43,8 @@ async function versionManuelCourante() {
 async function batir(expIds, { historique = true } = {}) {
   if (!expIds.length) return [];
 
-  const [exps, noyaux, annots, hist, groupes, membres, exclusions, msgs, manques] =
+  const [exps, noyaux, annots, hist, groupes, membres, exclusions, msgs,
+         parcours, manques] =
     await Promise.all([
     query(`SELECT e.*, c.nom AS corpus_nom, c.version_decoupeur AS corpus_decoupeur
            FROM bahyo_atelier_experience e
@@ -87,6 +91,10 @@ async function batir(expIds, { historique = true } = {}) {
            ORDER BY COALESCE(m.noyau_id, m.experience_id), m.place, m.created_at, m.tour`,
           [expIds]),
 
+    query(`SELECT p.* FROM bahyo_atelier_parcours p
+           WHERE p.noyau_id IN (SELECT id FROM bahyo_atelier_noyau
+                                WHERE experience_id = ANY($1))`, [expIds]),
+
     query(`SELECT mq.*, u.email AS annotateur_email
            FROM bahyo_atelier_manque mq
            LEFT JOIN bahyo_user u ON u.id = mq.annotateur_id
@@ -127,6 +135,9 @@ async function batir(expIds, { historique = true } = {}) {
     if (!exclusionsParGroupe.has(m.groupe_id)) exclusionsParGroupe.set(m.groupe_id, []);
     exclusionsParGroupe.get(m.groupe_id).push(m);
   }
+
+  const parcoursParNoyau = new Map();
+  for (const p of parcours.rows) parcoursParNoyau.set(p.noyau_id, p);
 
   const groupesParExp = new Map();
   for (const g of groupes.rows) {
@@ -220,6 +231,24 @@ async function batir(expIds, { historique = true } = {}) {
         force_horn: n.force_horn,
         sans_tiers_assistant: n.sans_tiers_assistant,
         statut_orphelin: n.statut_orphelin,
+        // Ce qui a ete fait avant de conclure. Seuls des actes verifiables
+        // y figurent : la lecture du texte source n'est pas observable et
+        // n'est donc pas inventee.
+        parcours: (() => {
+          const p = parcoursParNoyau.get(n.id);
+          if (!p) return null;
+          return {
+            ouvert_a: iso(p.ouvert_a),
+            conclu_a: iso(p.conclu_a),
+            duree_s: p.duree_s == null ? null : Math.round(+p.duree_s),
+            cas_similaires_consultes: +p.n_similaires,
+            sections_formalisme_lues: p.sections_lues || [],
+            propositions_demandees: +p.n_propositions,
+            tours_de_dialogue: +p.n_tours,
+            manques_signales: +p.n_manques,
+            ordre_des_places: p.ordre_places || [],
+          };
+        })(),
         annotations: mesAnnots,
       };
     });
@@ -398,12 +427,14 @@ function compter(experiences) {
     par_place: { A1: 0, A2: 0, A3: 0 },
     par_regime: {}, par_inscription: {}, par_mode_exclusion: {},
     groupes: 0, groupes_potentiellement_performatifs: 0,
+    noyaux_avec_parcours: 0,
     dialogues: 0, tours: 0, manques: 0,
     annotations_avec_ecart: 0, manques_avec_question: 0,
   };
   for (const e of experiences) {
     c.noyaux += e.noyaux.length;
     for (const n of e.noyaux) {
+      if (n.parcours) c.noyaux_avec_parcours++;
       for (const a of n.annotations) {
         c.annotations++;
         if (c.par_place[a.place] !== undefined) c.par_place[a.place]++;
@@ -445,7 +476,7 @@ router.get('/experience/:id', async (req, res) => {
         genere_le: new Date().toISOString(),
         genere_par: req.user.id,
         portee: 'experience',
-        version_schema: 'L.2/2026-09-22',
+        version_schema: 'L.2/2026-09-22+parcours',
         version_manuel_courante: await versionManuelCourante(),
         historique_inclus: historique,
       },
@@ -494,7 +525,7 @@ router.get('/', async (req, res) => {
         portee: tout ? 'integralite' : 'lot_filtre',
         filtres: { categorie: categorie || null, statut: statut || null,
                    corpus_id: corpus_id || null, annotees_seulement: annotees },
-        version_schema: 'L.2/2026-09-22',
+        version_schema: 'L.2/2026-09-22+parcours',
         version_manuel_courante: await versionManuelCourante(),
         historique_inclus: historique,
       },

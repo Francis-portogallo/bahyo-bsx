@@ -6,9 +6,14 @@
 <title>Atelier d'annotation — Bahyo</title>
 <!--
      Atelier d'annotation BS — interface du couple annotateur-assistant (AA)
-     @version 1.3.0
+     @version 1.4.0
      @date    2026-09-22
-     @change  1.3.0 — Modes d'exclusion et potentiel performatif derive
+     @change  1.4.0 — Instrumentation du geste : les actes observables sont
+                      consignes (sections du formalisme lues, cas similaires
+                      deplies, ordre de traversee). Rien n'est bloque ni
+                      oriente — on contraint la traversee, pas la conclusion.
+                      Les cas similaires se chargent des la selection du noyau.
+              1.3.0 — Modes d'exclusion et potentiel performatif derive
                       (specification du 22/09/2026). Terminologie : le terme
                       « doctrine » est proscrit — FORMALISME 3A pour le systeme
                       (stable), REGLES D'APPLICATION pour ce qui evolue.
@@ -235,6 +240,7 @@ details summary{cursor:pointer;font-size:12px;color:var(--mut);padding:4px 0}
     <button data-v="liste"  class="on">Expériences</button>
     <button data-v="manuel">Manuel vivant</button>
     <button data-v="stats">Tableau de bord</button>
+    <button data-v="parcours">Régularité</button>
   </nav>
   <div class="hdr-right">
     <button id="btn-doc" class="btn-doc" style="display:none" onclick="tiroir(true)"
@@ -452,6 +458,38 @@ details summary{cursor:pointer;font-size:12px;color:var(--mut);padding:4px 0}
   </div>
 </div>
 
+<!-- ══════════ RÉGULARITÉ DU GESTE ══════════ -->
+<div class="view" id="v-parcours">
+  <div class="wrap" style="max-width:1000px">
+    <h1>Régularité du geste</h1>
+    <p class="muted small" style="margin:0 0 16px">
+      Le schéma d'annotation est systématique ; la traversée ne l'était pas.
+      Ces chiffres décrivent ce qui a été effectivement fait avant de conclure.
+      Ils ne jugent rien — ils rendent visible ce qui, de l'intérieur, ne se voit pas.
+    </p>
+    <div class="card" style="margin-bottom:14px"><div class="stat" id="pc-global"></div></div>
+    <div class="cols" style="grid-template-columns:1fr 1fr">
+      <div class="card"><h3>Actes consignés</h3><div id="pc-actes"></div></div>
+      <div class="card"><h3>Sections du formalisme consultées</h3><div id="pc-sections"></div></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>Ce qui est observé — et ce qui ne l'est pas</h3>
+      <p class="small" style="color:var(--ink2);margin:0">
+        Sont consignés les actes vérifiables : sections du formalisme ouvertes,
+        cas similaires dépliés, assistant sollicité, tours de dialogue, ordre de
+        traversée des places, durées.
+        <br><br>
+        <strong>La lecture du texte source n'est pas consignée.</strong> Le panneau
+        est affiché en permanence : en inférer la lecture serait une fiction, et une
+        fiction dans les données d'entraînement est pire qu'une absence.
+        <br><br>
+        Cette instrumentation décrit la méthode, pas la personne. Rien ici ne bloque
+        ni n'oriente une décision — on contraint la traversée, jamais la conclusion.
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ STATS ══════════ -->
 <div class="view" id="v-stats">
   <div class="wrap">
@@ -497,6 +535,42 @@ function toast(msg, err) {
   setTimeout(() => d.remove(), err ? 6000 : 3200);
 }
 
+// ── Instrumentation du geste ────────────────────────────────────────────────
+// Emet les actes que seul le navigateur observe. Groupes et envoyes par lots
+// pour ne pas multiplier les requetes ; jamais bloquant.
+const OBS = { file: [], minuteur: null, session: null };
+
+function acte(nom, champs = {}) {
+  if (!S.token) return;
+  OBS.file.push({ acte: nom, ...champs });
+  clearTimeout(OBS.minuteur);
+  OBS.minuteur = setTimeout(viderObservations, 1500);
+  if (OBS.file.length >= 10) viderObservations();
+}
+
+async function viderObservations() {
+  if (!OBS.file.length || !S.token) return;
+  const lot = OBS.file.splice(0, OBS.file.length);
+  try {
+    await fetch('/atelier/observations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + S.token,
+        'X-Session-Atelier': OBS.session || '',
+      },
+      body: JSON.stringify({ actes: lot }),
+      keepalive: true,
+    });
+  } catch { /* l'instrumentation ne doit jamais gener le travail */ }
+}
+
+// Ne pas perdre les derniers actes en quittant la page
+window.addEventListener('beforeunload', viderObservations);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') viderObservations();
+});
+
 async function api(path, opts = {}) {
   const r = await fetch(path, {
     ...opts,
@@ -521,7 +595,8 @@ function show(v) {
   document.querySelectorAll('.view').forEach(e => e.classList.remove('on'));
   $('v-' + v).classList.add('on');
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  if (v === 'stats')  chargerStats();
+  if (v === 'stats')    chargerStats();
+  if (v === 'parcours') chargerParcours();
   if (v === 'manuel') chargerManuel();
   if (v === 'liste')  chargerListe();
 }
@@ -565,6 +640,11 @@ async function entrer() {
     S.token = null; sessionStorage.removeItem('atelier_tk');
     return;
   }
+  // Une cle de seance regroupe les actes d'une meme session de travail
+  OBS.session = sessionStorage.getItem('atelier_seance')
+    || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  sessionStorage.setItem('atelier_seance', OBS.session);
+
   $('nav').style.display = 'flex';
   $('btn-out').style.display = 'inline-block';
   $('btn-doc').style.display = 'inline-block';
@@ -806,9 +886,47 @@ function selNoyau(id) {
   renderManques(S._manques || []);
   setPlace(S.place);
   chargerChat();
+  chargerSimilaires();
+  acte('noyau_ouvert', { noyau_id: id, experience_id: S.exp?.id, place: S.place });
+}
+
+// Les cas similaires se chargent maintenant a la selection, et non plus
+// seulement apres une proposition : leur consultation devient un acte qui a
+// un sens, et le cahier D.7 le demandait.
+async function chargerSimilaires() {
+  const n = S.noyaux.find(x => x.id === S.noyauId);
+  if (!n) return;
+  const mots = n.texte.toLowerCase().split(/\W+/).filter(w => w.length > 4);
+  if (!mots.length) {
+    $('a-simil').innerHTML = '<div class="empty small">Noyau trop court pour un rapprochement.</div>';
+    return;
+  }
+  try {
+    const d = await api('/atelier/catalogue?place=' + S.place
+                        + '&q=' + encodeURIComponent(mots[0]) + '&limit=5');
+    const cas = (d.catalogue || []).filter(c => c.noyau_id !== S.noyauId);
+    S._similaires = cas;
+    $('a-simil').innerHTML = cas.length ? `
+      <details onclick="if(!this.open) acte('similaires_consultes',
+               {noyau_id:S.noyauId, place:S.place, detail:{n:${cas.length}}})">
+        <summary>${cas.length} précédent(s) comparable(s)</summary>
+        <div style="margin-top:7px">${cas.map(c => `
+          <div class="manque" style="background:var(--bg);border-color:var(--line)">
+            <div class="small">${esc(c.noyau_texte)}</div>
+            <div class="small"><span class="b b-${esc(c.regime)}">${esc(c.regime)}</span>
+              ${c.identification ? ' ' + esc(c.identification) : ''}
+              <span class="muted"> · ${esc(c.poste || '')}</span></div>
+          </div>`).join('')}</div>
+      </details>`
+      : '<div class="empty small">Aucun précédent comparable.</div>';
+  } catch { /* silencieux */ }
 }
 
 function setPlace(p) {
+  if (S.noyauId && S.place !== p) {
+    acte('place_changee', { noyau_id: S.noyauId, experience_id: S.exp?.id,
+                            place: p, detail: { de: S.place, vers: p } });
+  }
   S.place = p; S.proposition = null;
   document.querySelectorAll('.places button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   $('btn-prop').style.display = p === 'A1' ? 'block' : 'none';
@@ -854,13 +972,22 @@ async function demanderProposition() {
     if (d.proposition.a_composer) $('f-compo').checked = true;
     onRegime();
 
-    // Cas similaires
-    $('a-simil').innerHTML = (d.cas_similaires || []).length
-      ? d.cas_similaires.map(c => `<div class="manque" style="background:var(--bg);border-color:var(--line)">
-          <div class="small">${esc(c.texte)}</div>
-          <div class="small"><span class="b b-${esc(c.regime)}">${esc(c.regime)}</span>
-            ${c.identification ? ' ' + esc(c.identification) : ''}</div></div>`).join('')
-      : '<div class="empty small">Aucun précédent comparable.</div>';
+    // Les cas similaires sont deja charges a la selection du noyau ;
+    // on les rafraichit avec ceux qu'a vus l'assistant.
+    if ((d.cas_similaires || []).length) {
+      $('a-simil').innerHTML = `
+        <details onclick="if(!this.open) acte('similaires_consultes',
+                 {noyau_id:S.noyauId, place:S.place,
+                  detail:{n:${d.cas_similaires.length}, via:'assistant'}})">
+          <summary>${d.cas_similaires.length} précédent(s) vus par l'assistant</summary>
+          <div style="margin-top:7px">${d.cas_similaires.map(c => `
+            <div class="manque" style="background:var(--bg);border-color:var(--line)">
+              <div class="small">${esc(c.texte)}</div>
+              <div class="small"><span class="b b-${esc(c.regime)}">${esc(c.regime)}</span>
+                ${c.identification ? ' ' + esc(c.identification) : ''}</div>
+            </div>`).join('')}</div>
+        </details>`;
+    }
   } catch (e) { toast(e.message, true); }
   finally { busy(b, false, 'Proposition assistant'); }
 }
@@ -1081,6 +1208,8 @@ function tiroir(ouvrir) {
   $('dr').classList.toggle('on', ouvrir);
   $('dr-ov').classList.toggle('on', ouvrir);
   if (ouvrir) {
+    acte('formalisme_ouvert', { noyau_id: S.noyauId, experience_id: S.exp?.id,
+                                place: S.place });
     if (!S.manuel) chargerFormalisme(); else renderFormalisme();
     setTimeout(() => $('dr-q').focus(), 260);
   }
@@ -1123,10 +1252,21 @@ function renderFormalisme() {
   };
 
   $('dr-b').innerHTML = vus.map(s => `
-    <details class="dr-sec" ${q ? 'open' : ''}>
+    <details class="dr-sec" ${q ? 'open' : ''}
+             ontoggle="if(this.open) acte('formalisme_section',
+               {noyau_id:S.noyauId, experience_id:S.exp?.id, place:S.place,
+                detail:{section_cle:'${esc(s.section_cle)}'}})">
       <summary>${surligne(s.titre)}</summary>
       <div class="body">${surligne(s.contenu_md)}</div>
     </details>`).join('');
+
+  // La recherche est un acte : elle dit ce que l'annotateur cherchait.
+  if (q && q.length >= 3) {
+    clearTimeout(S._rechTimer);
+    S._rechTimer = setTimeout(() => acte('formalisme_recherche', {
+      noyau_id: S.noyauId, place: S.place, detail: { terme: q },
+    }), 900);
+  }
 }
 
 // Raccourci clavier : D pour ouvrir, Echap pour fermer
@@ -1160,6 +1300,49 @@ async function chargerManuel() {
       : `<div class="card empty">Le manuel est vide. Les sections du formalisme
          (régimes d'énonciation, aptitudes éligibles, agglomération par A₃…)
          restent à rédiger.</div>`;
+  } catch (e) { toast(e.message, true); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RÉGULARITÉ DU GESTE
+// ═══════════════════════════════════════════════════════════════════════════
+async function chargerParcours() {
+  try {
+    const d = await api('/atelier/parcours');
+    const g = d.global || {};
+    const ecart = +g.duree_ecart_type || 0;
+    const moy   = +g.duree_moyenne_s || 0;
+
+    $('pc-global').innerHTML = [
+      ['Noyaux conclus', g.noyaux_traites ?? 0],
+      ['Durée moyenne', moy ? `${Math.round(moy)} s` : '—'],
+      ['Écart-type', ecart ? `${Math.round(ecart)} s` : '—'],
+      ['Similaires / cas', g.similaires_moyen ?? '—'],
+      ['Propositions / cas', g.propositions_moyen ?? '—'],
+      ['Tours / cas', g.tours_moyen ?? '—'],
+      ['Manques / cas', g.manques_moyen ?? '—'],
+      ['Conclus sans rien consulter', d.conclus_sans_consultation ?? 0],
+    ].map(([l, v]) => `<div class="s"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+    // Un écart-type du même ordre que la moyenne signale une traversée
+    // irrégulière — sans dire laquelle est la bonne.
+    if (moy && ecart > moy * 0.8) {
+      $('pc-global').insertAdjacentHTML('afterend',
+        `<div class="alerte" style="margin-top:12px">Les durées varient fortement
+         d'un cas à l'autre (écart-type ${Math.round(ecart)} s pour une moyenne de
+         ${Math.round(moy)} s). Cela peut refléter une réelle disparité des cas,
+         ou une traversée irrégulière. À regarder après quelques séances.</div>`);
+    }
+
+    const liste = (rows, lab, val) => rows.length ? rows.map(r => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;
+                  border-bottom:1px solid var(--line)">
+        <span>${esc(lab(r))}</span><strong>${val(r)}</strong></div>`).join('')
+      : '<div class="empty small">Aucun acte consigné pour l\'instant.</div>';
+
+    $('pc-actes').innerHTML    = liste(d.par_acte, r => r.acte, r => r.n);
+    $('pc-sections').innerHTML = liste(d.sections_du_formalisme,
+                                       r => r.section, r => r.n);
   } catch (e) { toast(e.message, true); }
 }
 

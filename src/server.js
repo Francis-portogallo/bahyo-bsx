@@ -1,7 +1,9 @@
 // src/server.js
-// @version 1.7.0
+// @version 1.8.0
 // @date    2026-09-22
-// @change  1.7.0 — Atelier v1.2.0 : modes d'exclusion, potentiel performatif
+// @change  1.8.0 — Atelier v1.3.0 : instrumentation du geste d'annotation.
+//                  Le parcours accompagne desormais chaque annotation a l'export.
+//          1.7.0 — Atelier v1.2.0 : modes d'exclusion, potentiel performatif
 //                  derive, champ de pratique. Terminologie « doctrine »
 //                  remplacee par formalisme / regles d'application.
 //          1.6.0 — Atelier v1.1.0 : conformite cahier de recette (historique
@@ -45,7 +47,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app     = express();
 const PORT    = process.env.PORT || 3001;
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 
 // ── Securite ─────────────────────────────────────────────────────────────────
 app.use(helmet({
